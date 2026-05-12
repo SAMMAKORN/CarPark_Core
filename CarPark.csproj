@@ -72,6 +72,7 @@
         <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.60" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.60" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.7" />
+        <PackageReference Include="EPPlus" Version="8.5.4" />
     </ItemGroup>
 
     <ItemGroup>

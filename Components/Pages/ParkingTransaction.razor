@@ -27,21 +27,35 @@ else
             <div class="d-flex flex-column gap-2">
                 <div class="d-flex align-items-center gap-3">
                     <label class="form-label mb-0" style="width: 160px; flex-shrink: 0">หมายเลขบัตร</label>
-                    <div class="flex-grow-1">
+                    <div class="flex-grow-1 position-relative">
                         <input class="form-control form-control-lg"
-                               list="open-ticket-options"
                                @ref="_ticketInputRef"
-                               @bind="_ticketNoInput"
-                               @bind:event="oninput"
-                               @bind:after="OnTicketNoChanged"
+                               value="@_ticketNoInput"
+                               @oninput="OnTicketSearchInput"
+                               @onfocus="() => _showTicketDropdown = true"
+                               @onfocusout="OnTicketFocusOut"
                                @onkeydown="OnTicketKeyDown"
-                               placeholder="พิมพ์หมายเลขบัตร..." />
-                        <datalist id="open-ticket-options">
-                            @foreach (var openTicket in GetTicketSuggestions())
+                               placeholder="ค้นหาหมายเลขบัตร..." />
+                        @if (_showTicketDropdown && _openTransactions.Any())
+                        {
+                            var suggestions = GetTicketSuggestions().ToList();
+                            @if (suggestions.Any())
                             {
-                                <option value="@openTicket.TicketNo">@($"{openTicket.PlateNo} | {openTicket.ParkingLot?.LotCode}")</option>
+                                <div class="dropdown-menu show w-100 position-absolute shadow"
+                                     style="max-height: 280px; overflow-y: auto; z-index: 1050; top: 100%">
+                                    @foreach (var ticket in suggestions)
+                                    {
+                                        <button type="button" class="dropdown-item py-2 @(_selectedOpenTransaction?.Id == ticket.Id ? "active" : "")"
+                                                @onmousedown="() => SelectOpenTicket(ticket)">
+                                            <div class="fw-semibold">@ticket.TicketNo</div>
+                                            <small class="@(_selectedOpenTransaction?.Id == ticket.Id ? "text-white-50" : "text-muted")">
+                                                @ticket.PlateNo &nbsp;·&nbsp; @(ticket.ParkingLot?.LotCode ?? "-")
+                                            </small>
+                                        </button>
+                                    }
+                                </div>
                             }
-                        </datalist>
+                        }
                     </div>
                 </div>
 
@@ -181,21 +195,45 @@ else
                                 <th>เวลาออก</th>
                                 <th>นาที</th>
                                 <th>ยอด (บาท)</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var tx in _transactions)
                             {
-                                <tr>
-                                    <td>@tx.TicketNo</td>
-                                    <td>@tx.PlateNo</td>
-                                    <td>@($"{tx.ParkingLot?.LotCode ?? "-"}")</td>
-                                    <td>@(tx.OutAt.HasValue ? "ออก" : "เข้า")</td>
-                                    <td>@ToLocalDateTimeText(tx.InAt)</td>
-                                    <td>@ToLocalDateTimeText(tx.OutAt)</td>
-                                    <td>@GetDisplayMinutes(tx)</td>
-                                    <td>@(tx.TotalAmount?.ToString("0.00") ?? "-")</td>
-                                </tr>
+                                @if (_editingTxId == tx.Id)
+                                {
+                                    <tr class="table-warning">
+                                        <td><input class="form-control form-control-sm" @bind="_editTicketNo" /></td>
+                                        <td><input class="form-control form-control-sm" @bind="_editPlateNo" /></td>
+                                        <td class="text-muted">@(tx.ParkingLot?.LotCode ?? "-")</td>
+                                        <td class="text-muted">@(tx.OutAt.HasValue ? "ออก" : "เข้า")</td>
+                                        <td><input class="form-control form-control-sm" type="datetime-local" @bind="_editInAt" /></td>
+                                        <td><input class="form-control form-control-sm" type="datetime-local" @bind="_editOutAt" /></td>
+                                        <td class="text-muted">-</td>
+                                        <td><input class="form-control form-control-sm" type="number" step="0.01" min="0" @bind="_editTotalAmount" placeholder="-" /></td>
+                                        <td class="text-end" style="white-space: nowrap">
+                                            <button class="btn btn-sm btn-success me-1" @onclick="SaveTxEditAsync">บันทึก</button>
+                                            <button class="btn btn-sm btn-secondary" @onclick="CancelTxEdit">ยกเลิก</button>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td>@tx.TicketNo</td>
+                                        <td>@tx.PlateNo</td>
+                                        <td>@(tx.ParkingLot?.LotCode ?? "-")</td>
+                                        <td>@(tx.OutAt.HasValue ? "ออก" : "เข้า")</td>
+                                        <td>@ToLocalDateTimeText(tx.InAt)</td>
+                                        <td>@ToLocalDateTimeText(tx.OutAt)</td>
+                                        <td>@GetDisplayMinutes(tx)</td>
+                                        <td>@(tx.TotalAmount?.ToString("0.00") ?? "-")</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => StartTxEdit(tx)">แก้ไข</button>
+                                        </td>
+                                    </tr>
+                                }
                             }
                         </tbody>
                     </table>
@@ -225,9 +263,17 @@ else
 
     private bool _pendingFocusCloseBtn;
     private bool _pendingFocusTicket;
+    private bool _showTicketDropdown;
 
     private string _errorMessage = string.Empty;
     private string _successMessage = string.Empty;
+
+    private Guid? _editingTxId;
+    private string _editTicketNo = string.Empty;
+    private string _editPlateNo = string.Empty;
+    private DateTime _editInAt;
+    private DateTime? _editOutAt;
+    private decimal? _editTotalAmount;
 
     private bool _showModal;
     private bool _isCheckIn;
@@ -295,15 +341,37 @@ else
         }
     }
 
-    private Task OnTicketNoChanged()
+    private void OnTicketSearchInput(ChangeEventArgs e)
     {
+        _ticketNoInput = e.Value?.ToString() ?? string.Empty;
+        _showTicketDropdown = true;
         SyncSelectedTicketContext();
-        return Task.CompletedTask;
+    }
+
+    private async Task OnTicketFocusOut()
+    {
+        await Task.Delay(150);
+        _showTicketDropdown = false;
+    }
+
+    private void SelectOpenTicket(ParkingTransactionModel ticket)
+    {
+        _ticketNoInput = ticket.TicketNo;
+        _plateNoInput = ticket.PlateNo;
+        _parkingLotIdText = ticket.ParkingLotId.ToString();
+        _selectedOpenTransaction = ticket;
+        _showTicketDropdown = false;
     }
 
     private async Task OnTicketKeyDown(KeyboardEventArgs e)
     {
+        if (e.Key == "Escape")
+        {
+            _showTicketDropdown = false;
+            return;
+        }
         if (e.Key != "Enter") return;
+        _showTicketDropdown = false;
         if (_selectedOpenTransaction is not null)
             await ProcessTicketAsync();
         else
@@ -453,6 +521,47 @@ else
 
         var runningMinutes = (int)Math.Ceiling((_currentUtc - tx.InAt).TotalMinutes);
         return Math.Max(0, runningMinutes);
+    }
+
+    private void StartTxEdit(ParkingTransactionModel tx)
+    {
+        ClearMessages();
+        _editingTxId = tx.Id;
+        _editTicketNo = tx.TicketNo;
+        _editPlateNo = tx.PlateNo;
+        _editInAt = tx.InAt.ToLocalTime();
+        _editOutAt = tx.OutAt?.ToLocalTime();
+        _editTotalAmount = tx.TotalAmount;
+    }
+
+    private void CancelTxEdit()
+    {
+        _editingTxId = null;
+    }
+
+    private async Task SaveTxEditAsync()
+    {
+        if (_editingTxId is null) return;
+        ClearMessages();
+
+        try
+        {
+            await ParkingTransactionService.UpdateAsync(
+                _editingTxId.Value,
+                _editTicketNo,
+                _editPlateNo,
+                _editInAt,
+                _editOutAt,
+                _editTotalAmount);
+
+            _editingTxId = null;
+            _successMessage = "แก้ไขรายการสำเร็จ";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
     }
 
     private void CloseModal()

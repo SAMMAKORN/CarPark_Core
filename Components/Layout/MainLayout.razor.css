@@ -55,21 +55,21 @@
         flex-direction: row;
     }
 
-    .page.layout-auth .sidebar {
-        width: 280px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
-    }
+        .page.layout-auth .sidebar {
+            width: 280px;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+        }
 
-    .page.layout-auth .app-top {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-    }
+        .page.layout-auth .app-top {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
 
-    .page.layout-auth .content {
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
-    }
+        .page.layout-auth .content {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
 }

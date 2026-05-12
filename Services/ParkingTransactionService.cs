@@ -20,6 +20,25 @@ namespace CarPark.Services
                 .ToListAsync(cancellationToken);
         }
 
+        public async Task<List<ParkingTransaction>> GetByDateRangeAsync(
+            DateTime dateFromLocal,
+            DateTime dateToLocal,
+            CancellationToken cancellationToken = default)
+        {
+            var utcStart = dateFromLocal.Date.ToUniversalTime();
+            var utcEnd = dateToLocal.Date.AddDays(1).ToUniversalTime();
+
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            return await db.ParkingTransactions
+                .AsNoTracking()
+                .AsSplitQuery()
+                .Include(x => x.ParkingLot)
+                .Where(x => x.InAt >= utcStart && x.InAt < utcEnd)
+                .OrderBy(x => x.InAt)
+                .ToListAsync(cancellationToken);
+        }
+
         public async Task<List<ParkingTransaction>> GetTodayTransactionsAsync(CancellationToken cancellationToken = default)
         {
             var utcStart = DateTime.Today.ToUniversalTime();
@@ -29,6 +48,7 @@ namespace CarPark.Services
 
             return await db.ParkingTransactions
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(x => x.ParkingLot)
                 .Where(x => x.InAt >= utcStart && x.InAt < utcEnd)
                 .OrderByDescending(x => x.InAt)
@@ -41,6 +61,7 @@ namespace CarPark.Services
 
             return await db.ParkingTransactions
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(x => x.ParkingLot)
                 .OrderByDescending(x => x.InAt)
                 .Take(Math.Clamp(take, 1, 200))
@@ -53,6 +74,7 @@ namespace CarPark.Services
 
             return await db.ParkingTransactions
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(x => x.ParkingLot)
                 .Where(x => x.OutAt == null)
                 .OrderByDescending(x => x.InAt)
@@ -71,11 +93,51 @@ namespace CarPark.Services
 
             return await db.ParkingTransactions
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(x => x.ParkingLot)
                 .FirstOrDefaultAsync(
                     x => x.TicketNo == normalizedTicketNo
                          && x.OutAt == null,
                     cancellationToken);
+        }
+
+        public async Task UpdateAsync(
+            Guid id,
+            string ticketNo,
+            string plateNo,
+            DateTime inAtLocal,
+            DateTime? outAtLocal,
+            decimal? totalAmount,
+            CancellationToken cancellationToken = default)
+        {
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            var existing = await db.ParkingTransactions
+                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+                ?? throw new InvalidOperationException("ไม่พบรายการจอดรถ");
+
+            var inAtUtc = inAtLocal.ToUniversalTime();
+            var outAtUtc = outAtLocal?.ToUniversalTime();
+
+            int? totalMinutes = null;
+            if (outAtUtc.HasValue)
+            {
+                totalMinutes = (int)Math.Ceiling((outAtUtc.Value - inAtUtc).TotalMinutes);
+                if (totalMinutes < 0) totalMinutes = 0;
+            }
+
+            existing.TicketNo = NormalizeRequired(ticketNo, "กรุณากรอกหมายเลขบัตร");
+            existing.PlateNo = NormalizeRequired(plateNo, "กรุณากรอกทะเบียนรถ");
+            existing.InAt = inAtUtc;
+            existing.OutAt = outAtUtc;
+            existing.TotalMinutes = totalMinutes;
+            existing.TotalAmount = totalAmount;
+            existing.Status = outAtUtc.HasValue ? TransactionType.OUT : TransactionType.IN;
+            existing.IsOvernight = outAtUtc.HasValue && inAtUtc.Date != outAtUtc.Value.Date;
+            existing.UpdateBy = currentUserContext.CurrentUserId;
+            existing.UpdateAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<ParkingTransaction> CheckInAsync(
@@ -181,6 +243,7 @@ namespace CarPark.Services
             await db.SaveChangesAsync(cancellationToken);
 
             return await db.ParkingTransactions
+                .AsSplitQuery()
                 .Include(x => x.ParkingLot)
                 .FirstAsync(x => x.Id == existing.Id, cancellationToken);
         }
