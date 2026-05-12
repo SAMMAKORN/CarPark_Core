@@ -1,0 +1,289 @@
+@page "/manage/parking-lot"
+@inject CurrentUserContext CurrentUserContext
+@inject ParkingLotService ParkingLotService
+
+<PageTitle>จัดการลานจอดรถ</PageTitle>
+
+<div class="view-head">
+    <h1>จัดการลานจอดรถ</h1>
+    <p class="view-subtitle">ตั้งค่าลานจอดรถและดูรายละเอียดอัตราค่าบริการ</p>
+</div>
+
+@if (!CurrentUserContext.IsAdmin)
+{
+    <div class="alert alert-danger" role="alert">
+        ไม่มีสิทธิ์เข้าใช้งาน หน้านี้สำหรับผู้ดูแลระบบเท่านั้น
+    </div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">เพิ่มลานจอดรถ</h5>
+
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label" for="lotCode">รหัสลาน</label>
+                    <input class="form-control" id="lotCode" @bind="_newLotCode" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label" for="lotName">ชื่อลาน</label>
+                    <input class="form-control" id="lotName" @bind="_newLotName" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="lotActive" @bind="_newLotIsActive" />
+                        <label class="form-check-label" for="lotActive">ใช้งาน</label>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="AddLotAsync">เพิ่ม</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">รายการลานจอดรถ</h5>
+
+            @if (_isLoading)
+            {
+                <p>กำลังโหลด...</p>
+            }
+            else if (_lots.Count == 0)
+            {
+                <p>ไม่พบรายการลานจอดรถ</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>รหัสลาน</th>
+                                <th>ชื่อลาน</th>
+                                <th>ใช้งาน</th>
+                                <th class="text-end">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var lot in _lots)
+                            {
+                                <tr>
+                                    @if (_editingLotId == lot.Id)
+                                    {
+                                        <td><input class="form-control" @bind="_editLotCode" /></td>
+                                        <td><input class="form-control" @bind="_editLotName" /></td>
+                                        <td>
+                                            <input class="form-check-input" type="checkbox" @bind="_editLotIsActive" />
+                                        </td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-success me-2" @onclick="SaveEditAsync">บันทึก</button>
+                                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">ยกเลิก</button>
+                                        </td>
+                                    }
+                                    else
+                                    {
+                                        <td>@lot.LotCode</td>
+                                        <td>@lot.LotName</td>
+                                        <td>@(lot.IsActive ? "ใช้งาน" : "ปิดใช้งาน")</td>
+                                        <td class="text-end">
+                                            <a class="btn btn-sm btn-outline-dark me-2" href="@($"/manage/parking-lot/{lot.Id}/rate-rules")">อัตราค่าบริการ</a>
+                                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="@(() => StartEdit(lot))">แก้ไข</button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteLotAsync(lot.Id))">ลบ</button>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger mt-3" role="alert">
+            @_errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mt-3" role="alert">
+            @_successMessage
+        </div>
+    }
+}
+
+@code {
+    private readonly List<ParkingLot> _lots = [];
+    private bool _isLoading = true;
+
+    private string _newLotCode = string.Empty;
+    private string _newLotName = string.Empty;
+    private bool _newLotIsActive = true;
+
+    private Guid? _editingLotId;
+    private string _editLotCode = string.Empty;
+    private string _editLotName = string.Empty;
+    private bool _editLotIsActive;
+
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLotsAsync();
+    }
+
+    private async Task LoadLotsAsync()
+    {
+        if (!CurrentUserContext.IsAdmin)
+        {
+            _isLoading = false;
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var lots = await ParkingLotService.GetAllAsync();
+            _lots.Clear();
+            _lots.AddRange(lots);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task AddLotAsync()
+    {
+        ClearMessages();
+
+        if (!ValidateLot(_newLotCode, _newLotName))
+        {
+            return;
+        }
+
+        try
+        {
+            await ParkingLotService.CreateAsync(new ParkingLot
+            {
+                LotCode = _newLotCode,
+                LotName = _newLotName,
+                IsActive = _newLotIsActive
+            });
+
+            _newLotCode = string.Empty;
+            _newLotName = string.Empty;
+            _newLotIsActive = true;
+            _successMessage = "เพิ่มลานจอดรถสำเร็จ";
+
+            await LoadLotsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void StartEdit(ParkingLot lot)
+    {
+        ClearMessages();
+        _editingLotId = lot.Id;
+        _editLotCode = lot.LotCode;
+        _editLotName = lot.LotName;
+        _editLotIsActive = lot.IsActive;
+    }
+
+    private void CancelEdit()
+    {
+        _editingLotId = null;
+        _editLotCode = string.Empty;
+        _editLotName = string.Empty;
+        _editLotIsActive = false;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        ClearMessages();
+
+        if (_editingLotId is null)
+        {
+            return;
+        }
+
+        if (!ValidateLot(_editLotCode, _editLotName))
+        {
+            return;
+        }
+
+        try
+        {
+            await ParkingLotService.UpdateAsync(new ParkingLot
+            {
+                Id = _editingLotId.Value,
+                LotCode = _editLotCode,
+                LotName = _editLotName,
+                IsActive = _editLotIsActive
+            });
+
+            _successMessage = "แก้ไขลานจอดรถสำเร็จ";
+            CancelEdit();
+            await LoadLotsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteLotAsync(Guid id)
+    {
+        ClearMessages();
+
+        try
+        {
+            await ParkingLotService.DeleteAsync(id);
+            _successMessage = "ลบลานจอดรถสำเร็จ";
+            await LoadLotsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private bool ValidateLot(string lotCode, string lotName)
+    {
+        if (string.IsNullOrWhiteSpace(lotCode))
+        {
+            _errorMessage = "กรุณากรอกรหัสลาน";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(lotName))
+        {
+            _errorMessage = "กรุณากรอกชื่อลาน";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ClearMessages()
+    {
+        _errorMessage = string.Empty;
+        _successMessage = string.Empty;
+    }
+}

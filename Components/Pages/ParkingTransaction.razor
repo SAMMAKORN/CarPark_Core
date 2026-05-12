@@ -1,0 +1,488 @@
+@page "/parking-transaction"
+@inject CurrentUserContext CurrentUserContext
+@inject ParkingTransactionService ParkingTransactionService
+@using ParkingTransactionModel = CarPark.Models.ParkingTransaction
+@implements IDisposable
+
+<PageTitle>รายการจอดรถ</PageTitle>
+
+<div class="view-head">
+    <h1>รายการจอดรถ</h1>
+    <p class="view-subtitle">ใช้ปุ่มเดียวด้วยหมายเลขบัตร บัตรที่เปิดอยู่ = ออก, บัตรใหม่ = เข้า</p>
+    <p class="text-muted mb-0">เวลาปัจจุบัน: @_currentUtc.ToLocalTime().ToString("dd-MM-yyyy HH:mm:ss")</p>
+</div>
+
+@if (!CurrentUserContext.IsAuthenticated)
+{
+    <div class="alert alert-danger" role="alert">
+        กรุณาเข้าสู่ระบบก่อนใช้งานหน้านี้
+    </div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">ประมวลผลบัตร</h5>
+
+            <div class="d-flex flex-column gap-2">
+                <div class="d-flex align-items-center gap-3">
+                    <label class="form-label mb-0" style="width: 160px; flex-shrink: 0">หมายเลขบัตร</label>
+                    <div class="flex-grow-1">
+                        <input class="form-control form-control-lg"
+                               list="open-ticket-options"
+                               @ref="_ticketInputRef"
+                               @bind="_ticketNoInput"
+                               @bind:event="oninput"
+                               @bind:after="OnTicketNoChanged"
+                               @onkeydown="OnTicketKeyDown"
+                               placeholder="พิมพ์หมายเลขบัตร..." />
+                        <datalist id="open-ticket-options">
+                            @foreach (var openTicket in GetTicketSuggestions())
+                            {
+                                <option value="@openTicket.TicketNo">@($"{openTicket.PlateNo} | {openTicket.ParkingLot?.LotCode}")</option>
+                            }
+                        </datalist>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-3">
+                    <label class="form-label mb-0" style="width: 160px; flex-shrink: 0">ทะเบียนรถ</label>
+                    <input class="form-control form-control-lg flex-grow-1"
+                           @ref="_plateInputRef"
+                           @bind="_plateNoInput"
+                           @onkeydown="OnPlateKeyDown"
+                           disabled="@(_selectedOpenTransaction is not null)"
+                           placeholder="จำเป็นสำหรับบัตรใหม่" />
+                </div>
+
+                <div class="d-flex align-items-center gap-3">
+                    <label class="form-label mb-0" style="width: 160px; flex-shrink: 0">ลานจอดรถ</label>
+                    <input class="form-control form-control-lg flex-grow-1" readonly value="@GetCurrentLotDisplayText()" />
+                </div>
+
+                @if (_selectedOpenTransaction is not null)
+                {
+                    <div class="alert alert-info mb-0" role="alert">
+                        พบบัตรที่เปิดอยู่ (สถานะ เข้า) กดปุ่มเพื่อคืนบัตร (ออก) และคำนวณยอด
+                        ระยะเวลา: @GetDisplayMinutes(_selectedOpenTransaction) นาที
+                    </div>
+                }
+
+                <div class="d-flex justify-content-end">
+                    <button class="btn btn-primary btn-lg" @onclick="ProcessTicketAsync">ประมวลผลบัตร</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger mb-3" role="alert">@_errorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-3" role="alert">@_successMessage</div>
+    }
+
+    @if (_showModal && _modalTransaction is not null)
+    {
+        <div class="modal-backdrop fade show"></div>
+        <div class="modal fade show d-block" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header @(_isCheckIn ? "bg-success text-white" : "bg-primary text-white")">
+                        <h5 class="modal-title">@(_isCheckIn ? "บันทึกการเข้าสำเร็จ" : "คืนบัตรสำเร็จ")</h5>
+                    </div>
+                    <div class="modal-body">
+                        <table class="table table-borderless mb-0">
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted fw-semibold" style="width:40%">หมายเลขบัตร</td>
+                                    <td>@_modalTransaction.TicketNo</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted fw-semibold">ทะเบียนรถ</td>
+                                    <td>@_modalTransaction.PlateNo</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted fw-semibold">ลานจอดรถ</td>
+                                    <td>@(_modalTransaction.ParkingLot?.LotCode ?? _lots.FirstOrDefault(x => x.Id == _modalTransaction.ParkingLotId)?.LotCode ?? "-")</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted fw-semibold">สถานะ</td>
+                                    <td>@(_isCheckIn ? "เข้า" : "ออก")</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted fw-semibold">เวลาเข้า</td>
+                                    <td>@ToLocalDateTimeText(_modalTransaction.InAt)</td>
+                                </tr>
+                                @if (!_isCheckIn)
+                                {
+                                    <tr>
+                                        <td class="text-muted fw-semibold">เวลาออก</td>
+                                        <td>@ToLocalDateTimeText(_modalTransaction.OutAt)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted fw-semibold">ระยะเวลา</td>
+                                        <td>@(_modalTransaction.TotalMinutes ?? 0) นาที</td>
+                                    </tr>
+                                    <tr class="table-primary">
+                                        <td class="fw-bold fs-5">ยอดที่คำนวณได้</td>
+                                        <td class="fw-bold fs-2">@((_modalTransaction.TotalAmount ?? 0m).ToString("0.00")) บาท</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-danger" @ref="_closeModalBtnRef" @onclick="CloseModal">ปิด</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">รายการจอดรถวันนี้</h5>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => LoadDataAsync()">รีเฟรช</button>
+            </div>
+
+            @if (!_isLoading)
+            {
+                <div class="d-flex gap-3 mt-3 flex-wrap">
+                    <span class="badge bg-secondary fs-6">ทั้งหมด @_transactions.Count รายการ</span>
+                    <span class="badge bg-warning text-dark fs-6">ยังจอดอยู่ @_transactions.Count(x => !x.OutAt.HasValue) รายการ</span>
+                    <span class="badge bg-success fs-6">ออกแล้ว @_transactions.Count(x => x.OutAt.HasValue) รายการ</span>
+                </div>
+            }
+
+            @if (_isLoading)
+            {
+                <p class="mt-3 mb-0">กำลังโหลด...</p>
+            }
+            else if (_transactions.Count == 0)
+            {
+                <p class="mt-3 mb-0">ไม่พบรายการจอดรถวันนี้</p>
+            }
+            else
+            {
+                <div class="table-responsive mt-3">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>หมายเลขบัตร</th>
+                                <th>ทะเบียน</th>
+                                <th>ลาน</th>
+                                <th>สถานะ</th>
+                                <th>เวลาเข้า</th>
+                                <th>เวลาออก</th>
+                                <th>นาที</th>
+                                <th>ยอด (บาท)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var tx in _transactions)
+                            {
+                                <tr>
+                                    <td>@tx.TicketNo</td>
+                                    <td>@tx.PlateNo</td>
+                                    <td>@($"{tx.ParkingLot?.LotCode ?? "-"}")</td>
+                                    <td>@(tx.OutAt.HasValue ? "ออก" : "เข้า")</td>
+                                    <td>@ToLocalDateTimeText(tx.InAt)</td>
+                                    <td>@ToLocalDateTimeText(tx.OutAt)</td>
+                                    <td>@GetDisplayMinutes(tx)</td>
+                                    <td>@(tx.TotalAmount?.ToString("0.00") ?? "-")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<ParkingLot> _lots = [];
+    private readonly List<ParkingTransactionModel> _transactions = [];
+    private readonly List<ParkingTransactionModel> _openTransactions = [];
+    private bool _isLoading = true;
+    private DateTime _currentUtc = DateTime.UtcNow;
+    private int _tickCount;
+    private readonly CancellationTokenSource _liveUpdateCts = new();
+
+    private string _ticketNoInput = string.Empty;
+    private string _plateNoInput = string.Empty;
+    private string _parkingLotIdText = string.Empty;
+    private ParkingTransactionModel? _selectedOpenTransaction;
+
+    private ElementReference _ticketInputRef;
+    private ElementReference _plateInputRef;
+    private ElementReference _closeModalBtnRef;
+
+    private bool _pendingFocusCloseBtn;
+    private bool _pendingFocusTicket;
+
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
+
+    private bool _showModal;
+    private bool _isCheckIn;
+    private ParkingTransactionModel? _modalTransaction;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingFocusCloseBtn)
+        {
+            _pendingFocusCloseBtn = false;
+            await _closeModalBtnRef.FocusAsync();
+        }
+        else if (_pendingFocusTicket)
+        {
+            _pendingFocusTicket = false;
+            await _ticketInputRef.FocusAsync();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (CurrentUserContext.CurrentParkingLot is not null)
+        {
+            _parkingLotIdText = CurrentUserContext.CurrentParkingLot.Id.ToString();
+        }
+
+        await LoadDataAsync();
+        StartLiveUpdates();
+    }
+
+    private async Task LoadDataAsync(bool showLoading = true)
+    {
+        if (showLoading)
+        {
+            _isLoading = true;
+        }
+
+        try
+        {
+            var lots = await ParkingTransactionService.GetActiveParkingLotsAsync();
+            var transactions = await ParkingTransactionService.GetTodayTransactionsAsync();
+            var openTransactions = await ParkingTransactionService.GetOpenTransactionsAsync();
+
+            _lots.Clear();
+            _lots.AddRange(lots);
+
+            _transactions.Clear();
+            _transactions.AddRange(transactions);
+
+            _openTransactions.Clear();
+            _openTransactions.AddRange(openTransactions);
+
+            SyncSelectedTicketContext();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            if (showLoading)
+            {
+                _isLoading = false;
+            }
+        }
+    }
+
+    private Task OnTicketNoChanged()
+    {
+        SyncSelectedTicketContext();
+        return Task.CompletedTask;
+    }
+
+    private async Task OnTicketKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        if (_selectedOpenTransaction is not null)
+            await ProcessTicketAsync();
+        else
+            await _plateInputRef.FocusAsync();
+    }
+
+    private async Task OnPlateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        await ProcessTicketAsync();
+    }
+
+    private async Task ProcessTicketAsync()
+    {
+        ClearMessages();
+
+        var ticketNo = _ticketNoInput.Trim();
+        if (string.IsNullOrWhiteSpace(ticketNo))
+        {
+            _errorMessage = "กรุณากรอกหมายเลขบัตร";
+            return;
+        }
+
+        try
+        {
+            var openTicket = await ParkingTransactionService.GetOpenByTicketNoAsync(ticketNo);
+
+            if (openTicket is not null)
+            {
+                var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo);
+                _modalTransaction = result;
+                _isCheckIn = false;
+                _showModal = true;
+                _pendingFocusCloseBtn = true;
+            }
+            else
+            {
+                if (!Guid.TryParse(_parkingLotIdText, out var parkingLotId))
+                {
+                    _errorMessage = "กรุณาเลือกลานจอดรถสำหรับการเข้าใหม่";
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(_plateNoInput))
+                {
+                    _errorMessage = "กรุณากรอกทะเบียนรถสำหรับการเข้าใหม่";
+                    return;
+                }
+
+                await ParkingTransactionService.CheckInAsync(parkingLotId, ticketNo, _plateNoInput);
+                _successMessage = "บันทึกการเข้าสำเร็จ";
+                _pendingFocusTicket = true;
+            }
+
+            _ticketNoInput = string.Empty;
+            _plateNoInput = string.Empty;
+            _parkingLotIdText = CurrentUserContext.CurrentParkingLot?.Id.ToString() ?? string.Empty;
+            _selectedOpenTransaction = null;
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void SyncSelectedTicketContext()
+    {
+        var ticketNo = _ticketNoInput.Trim();
+        _selectedOpenTransaction = _openTransactions.FirstOrDefault(
+            x => string.Equals(x.TicketNo, ticketNo, StringComparison.OrdinalIgnoreCase));
+
+        if (_selectedOpenTransaction is not null)
+        {
+            _plateNoInput = _selectedOpenTransaction.PlateNo;
+            _parkingLotIdText = _selectedOpenTransaction.ParkingLotId.ToString();
+        }
+    }
+
+    private IEnumerable<ParkingTransactionModel> GetTicketSuggestions()
+    {
+        const int maxSuggestions = 30;
+        var keyword = _ticketNoInput.Trim();
+
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return _openTransactions.Take(maxSuggestions);
+        }
+
+        return _openTransactions
+            .Where(x => x.TicketNo.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .Take(maxSuggestions);
+    }
+
+    private string GetCurrentLotDisplayText()
+    {
+        if (_selectedOpenTransaction is not null)
+        {
+            var openLot = _lots.FirstOrDefault(x => x.Id == _selectedOpenTransaction.ParkingLotId);
+            return openLot is not null ? $"{openLot.LotCode} - {openLot.LotName}" : _parkingLotIdText;
+        }
+
+        var sessionLot = CurrentUserContext.CurrentParkingLot;
+        return sessionLot is not null ? $"{sessionLot.LotCode} - {sessionLot.LotName}" : string.Empty;
+    }
+
+    private void StartLiveUpdates()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!_liveUpdateCts.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, _liveUpdateCts.Token);
+                    _currentUtc = DateTime.UtcNow;
+                    _tickCount++;
+
+                    if (_tickCount % 30 == 0)
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            await LoadDataAsync(showLoading: false);
+                            StateHasChanged();
+                        });
+                    }
+                    else
+                    {
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Component disposed.
+            }
+        }, _liveUpdateCts.Token);
+    }
+
+    private int GetDisplayMinutes(ParkingTransactionModel tx)
+    {
+        if (tx.OutAt.HasValue)
+        {
+            return tx.TotalMinutes ?? 0;
+        }
+
+        var runningMinutes = (int)Math.Ceiling((_currentUtc - tx.InAt).TotalMinutes);
+        return Math.Max(0, runningMinutes);
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _modalTransaction = null;
+        _pendingFocusTicket = true;
+    }
+
+    private void ClearMessages()
+    {
+        _errorMessage = string.Empty;
+        _successMessage = string.Empty;
+    }
+
+    private static string ToLocalDateTimeText(DateTime utcDateTime)
+    {
+        return utcDateTime.ToLocalTime().ToString("dd-MM-yyyy HH:mm:ss");
+    }
+
+    private static string ToLocalDateTimeText(DateTime? utcDateTime)
+    {
+        return utcDateTime.HasValue
+            ? utcDateTime.Value.ToLocalTime().ToString("dd-MM-yyyy HH:mm:ss")
+            : "-";
+    }
+
+    public void Dispose()
+    {
+        _liveUpdateCts.Cancel();
+        _liveUpdateCts.Dispose();
+    }
+}

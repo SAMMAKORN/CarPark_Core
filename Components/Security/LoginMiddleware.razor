@@ -1,0 +1,56 @@
+@implements IDisposable
+@inject NavigationManager NavigationManager
+@inject CurrentUserContext CurrentUserContext
+
+@code {
+    [Parameter]
+    public RouteData? RouteData { get; set; }
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        EnforceLoginPolicy();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        EnforceLoginPolicy();
+    }
+
+    private void EnforceLoginPolicy()
+    {
+        var path = NavigationManager.ToBaseRelativePath(NavigationManager.Uri)
+            .Split('?', '#')[0]
+            .Trim('/')
+            .ToLowerInvariant();
+
+        var isLoginPage = path == "login";
+        var isChangePasswordPage = path == "change-password";
+
+        if (!CurrentUserContext.IsAuthenticated && !isLoginPage)
+        {
+            NavigationManager.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        if (CurrentUserContext.IsAuthenticated && CurrentUserContext.MustChangePassword && !isChangePasswordPage)
+        {
+            NavigationManager.NavigateTo("/change-password", replace: true);
+            return;
+        }
+
+        if (CurrentUserContext.IsAuthenticated && isLoginPage)
+        {
+            NavigationManager.NavigateTo("/", replace: true);
+        }
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

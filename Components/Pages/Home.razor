@@ -1,0 +1,36 @@
+@page "/"
+@inject CurrentUserContext CurrentUserContext
+
+<PageTitle>หน้าหลัก</PageTitle>
+
+<div class="view-head">
+    <h1>หน้าหลัก</h1>
+    <p class="view-subtitle">ยินดีต้อนรับสู่ระบบจัดการที่จอดรถ</p>
+</div>
+
+@if (!CurrentUserContext.IsAuthenticated)
+{
+    <div class="alert alert-info" role="alert">
+        กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ
+    </div>
+}
+else if (CurrentUserContext.IsAdmin)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">เมนูลัด</h5>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-primary" href="/manage/parking-lot">จัดการลานจอดรถ</a>
+                <a class="btn btn-outline-primary" href="/manage/user">จัดการผู้ใช้</a>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <p class="mb-0">เข้าสู่ระบบสำเร็จ</p>
+        </div>
+    </div>
+}

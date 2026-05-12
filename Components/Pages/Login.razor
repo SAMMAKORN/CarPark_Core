@@ -1,0 +1,108 @@
+@page "/login"
+@inject UserAuthService UserAuthService
+@inject CurrentUserContext CurrentUserContext
+@inject ParkingLotService ParkingLotService
+@inject NavigationManager NavigationManager
+
+<PageTitle>เข้าสู่ระบบ</PageTitle>
+
+@if (CurrentUserContext.IsAuthenticated)
+{
+    <div class="alert alert-info" role="alert">
+        คุณเข้าสู่ระบบแล้วในชื่อ <strong>@CurrentUserContext.CurrentUsername</strong> (@CurrentUserContext.CurrentRole)
+    </div>
+}
+else
+{
+    <div class="login-shell">
+        <div class="login-panel">
+            <div class="view-head text-center">
+                <h1>เข้าสู่ระบบ</h1>
+                <p class="view-subtitle">กรอกบัญชีของคุณเพื่อเข้าใช้งานระบบจัดการที่จอดรถ</p>
+            </div>
+
+            <div class="card login-card">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="username">ชื่อผู้ใช้</label>
+                        <input class="form-control" id="username" @bind="_username" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="password">รหัสผ่าน</label>
+                        <input class="form-control" id="password" type="password" @bind="_password" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="parkinglot">ลานจอดรถ</label>
+                        <select class="form-select" id="parkinglot" @bind="_selectedParkingLotId">
+                            <option value="">-- เลือกลานจอดรถ --</option>
+                            @foreach (var lot in _parkingLots)
+                            {
+                                <option value="@lot.Id">@lot.LotCode — @lot.LotName</option>
+                            }
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary w-100" @onclick="LoginAsync">เข้าสู่ระบบ</button>
+
+                    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                    {
+                        <div class="alert alert-danger mt-3" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private string _errorMessage = string.Empty;
+    private string _selectedParkingLotId = string.Empty;
+    private List<CarPark.Models.ParkingLot> _parkingLots = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await ParkingLotService.GetAllAsync();
+        _parkingLots = all.Where(x => x.IsActive).ToList();
+    }
+
+    private async Task LoginAsync()
+    {
+        _errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_selectedParkingLotId))
+        {
+            _errorMessage = "กรุณาเลือกลานจอดรถ";
+            return;
+        }
+
+        var user = await UserAuthService.LoginAsync(_username, _password);
+        if (user is null)
+        {
+            _errorMessage = "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง";
+            return;
+        }
+
+        var selectedLot = _parkingLots.FirstOrDefault(x => x.Id.ToString() == _selectedParkingLotId);
+        if (selectedLot is null)
+        {
+            _errorMessage = "ลานจอดรถที่เลือกไม่พร้อมใช้งาน";
+            return;
+        }
+
+        CurrentUserContext.SelectParkingLot(selectedLot);
+
+        NavigationManager.NavigateTo("/");
+    }
+}

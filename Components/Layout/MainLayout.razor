@@ -1,0 +1,24 @@
+@inherits LayoutComponentBase
+@inject CurrentUserContext CurrentUserContext
+
+<div class="page @(CurrentUserContext.IsAuthenticated ? "layout-auth" : "layout-guest")">
+    @if (CurrentUserContext.IsAuthenticated)
+    {
+        <div class="sidebar">
+            <NavMenu />
+        </div>
+    }
+
+    <main class="app-main">
+        @if (CurrentUserContext.IsAuthenticated)
+        {
+            <div class="top-row app-top px-4">
+                <div class="top-row-title">ศูนย์ควบคุมการจอดรถ</div>
+            </div>
+        }
+
+        <article class="content px-4 @(CurrentUserContext.IsAuthenticated ? "app-content" : "auth-content")">
+            @Body
+        </article>
+    </main>
+</div>
