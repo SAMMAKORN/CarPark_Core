@@ -94,7 +94,7 @@ else
                                 @foreach (var tx in _transactions)
                                 {
                                     <tr>
-                                        <td class="text-muted">@rowNo++</td>
+                                        <td class="text-muted">@(rowNo++)</td>
                                         <td>@tx.TicketNo</td>
                                         <td>@tx.PlateNo</td>
                                         <td>@(tx.ParkingLot is not null ? $"{tx.ParkingLot.LotCode} - {tx.ParkingLot.LotName}" : "-")</td>

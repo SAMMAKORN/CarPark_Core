@@ -50,7 +50,7 @@ namespace CarPark.Services
                 .AsNoTracking()
                 .AsSplitQuery()
                 .Include(x => x.ParkingLot)
-                .Where(x => x.InAt >= utcStart && x.InAt < utcEnd)
+                .Where(x => (x.InAt >= utcStart && x.InAt < utcEnd) || !x.OutAt.HasValue)
                 .OrderByDescending(x => x.InAt)
                 .ToListAsync(cancellationToken);
         }
