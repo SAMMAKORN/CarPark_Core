@@ -74,6 +74,11 @@ else
                     <input class="form-control form-control-lg flex-grow-1" readonly value="@GetCurrentLotDisplayText()" />
                 </div>
 
+                <div class="d-flex align-items-center gap-3">
+                    <label class="form-label mb-0" style="width: 160px; flex-shrink: 0">ประตู</label>
+                    <input class="form-control form-control-lg flex-grow-1" readonly value="@GetCurrentGateDisplayText()" />
+                </div>
+
                 @if (_selectedOpenTransaction is not null)
                 {
                     <div class="alert alert-info mb-0" role="alert">
@@ -123,6 +128,20 @@ else
                                     <td class="text-muted fw-semibold">ลานจอดรถ</td>
                                     <td>@(_modalTransaction.ParkingLot?.LotCode ?? _lots.FirstOrDefault(x => x.Id == _modalTransaction.ParkingLotId)?.LotCode ?? "-")</td>
                                 </tr>
+                                @if (_modalTransaction.InGate is not null)
+                                {
+                                    <tr>
+                                        <td class="text-muted fw-semibold">ประตูเข้า</td>
+                                        <td>@_modalTransaction.InGate.GateName</td>
+                                    </tr>
+                                }
+                                @if (!_isCheckIn && _modalTransaction.OutGate is not null)
+                                {
+                                    <tr>
+                                        <td class="text-muted fw-semibold">ประตูออก</td>
+                                        <td>@_modalTransaction.OutGate.GateName</td>
+                                    </tr>
+                                }
                                 <tr>
                                     <td class="text-muted fw-semibold">สถานะ</td>
                                     <td>@(_isCheckIn ? "เข้า" : "ออก")</td>
@@ -190,6 +209,8 @@ else
                                 <th>หมายเลขบัตร</th>
                                 <th>ทะเบียน</th>
                                 <th>ลาน</th>
+                                <th>ประตูเข้า</th>
+                                <th>ประตูออก</th>
                                 <th>สถานะ</th>
                                 <th>เวลาเข้า</th>
                                 <th>เวลาออก</th>
@@ -207,6 +228,8 @@ else
                                         <td><input class="form-control form-control-sm" @bind="_editTicketNo" /></td>
                                         <td><input class="form-control form-control-sm" @bind="_editPlateNo" /></td>
                                         <td class="text-muted">@(tx.ParkingLot?.LotCode ?? "-")</td>
+                                        <td class="text-muted">@(tx.InGate?.GateName ?? "-")</td>
+                                        <td class="text-muted">@(tx.OutGate?.GateName ?? "-")</td>
                                         <td class="text-muted">@(tx.OutAt.HasValue ? "ออก" : "เข้า")</td>
                                         <td><input class="form-control form-control-sm" type="datetime-local" @bind="_editInAt" /></td>
                                         <td><input class="form-control form-control-sm" type="datetime-local" @bind="_editOutAt" /></td>
@@ -224,6 +247,8 @@ else
                                         <td>@tx.TicketNo</td>
                                         <td>@tx.PlateNo</td>
                                         <td>@(tx.ParkingLot?.LotCode ?? "-")</td>
+                                        <td>@(tx.InGate?.GateName ?? "-")</td>
+                                        <td>@(tx.OutGate?.GateName ?? "-")</td>
                                         <td>@(tx.OutAt.HasValue ? "ออก" : "เข้า")</td>
                                         <td>@ToLocalDateTimeText(tx.InAt)</td>
                                         <td>@ToLocalDateTimeText(tx.OutAt)</td>
@@ -421,7 +446,7 @@ else
                     return;
                 }
 
-                await ParkingTransactionService.CheckInAsync(parkingLotId, ticketNo, _plateNoInput);
+                await ParkingTransactionService.CheckInAsync(parkingLotId, ticketNo, _plateNoInput, inGateId: CurrentUserContext.CurrentGate?.Id);
                 _successMessage = "บันทึกการเข้าสำเร็จ";
                 _pendingFocusTicket = true;
             }
@@ -465,6 +490,12 @@ else
         return _openTransactions
             .Where(x => x.TicketNo.Contains(keyword, StringComparison.OrdinalIgnoreCase))
             .Take(maxSuggestions);
+    }
+
+    private string GetCurrentGateDisplayText()
+    {
+        var gate = CurrentUserContext.CurrentGate;
+        return gate is null ? "(ไม่ระบุ)" : gate.GateName;
     }
 
     private string GetCurrentLotDisplayText()

@@ -1,6 +1,7 @@
 @page "/manage/parking-lot/{ParkingLotId:guid}/rate-rules"
 @inject CurrentUserContext CurrentUserContext
 @inject ParkingRateRuleService ParkingRateRuleService
+@inject ParkingLotService ParkingLotService
 
 <PageTitle>จัดการอัตราค่าบริการ</PageTitle>
 
@@ -35,10 +36,41 @@ else
                     <h5 class="card-title mb-1">@_lot.LotCode - @_lot.LotName</h5>
                     <small class="text-muted">รายละเอียดอัตราค่าบริการสำหรับลานจอดรถที่เลือก</small>
                 </div>
-                <a class="btn btn-outline-secondary" href="/manage/parking-lot">กลับสู่รายการลานจอดรถ</a>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary" href="@($"/manage/parking-lot/{ParkingLotId}/gates")">ประตู</a>
+                    <a class="btn btn-outline-secondary" href="/manage/parking-lot">กลับสู่รายการลานจอดรถ</a>
+                </div>
             </div>
         </div>
     </div>
+
+    @if (_otherLots.Count > 0)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">คัดลอกอัตราค่าบริการจากลานอื่น</h5>
+                <p class="text-muted small mb-2">คัดลอกกฎทั้งหมดจากลานที่เลือก โดยต่อท้ายจากลำดับที่มีอยู่</p>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label">เลือกลานต้นทาง</label>
+                        <select class="form-select" @bind="_copySourceLotId">
+                            <option value="">-- เลือกลาน --</option>
+                            @foreach (var lot in _otherLots)
+                            {
+                                <option value="@lot.Id">@lot.LotCode - @lot.LotName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-outline-secondary w-100" @onclick="CopyRulesAsync"
+                                disabled="@string.IsNullOrWhiteSpace(_copySourceLotId)">
+                            คัดลอกกฎ
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 
     <div class="card mb-3">
         <div class="card-body">
@@ -51,7 +83,7 @@ else
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">ลำดับ</label>
-                    <input class="form-control" type="number" min="1" @bind="_newSequence" />
+                    <input class="form-control" type="number" min="1" value="@_newSequence" readonly />
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">นาทีเริ่มต้น</label>
@@ -196,6 +228,8 @@ else
 
     private ParkingLot? _lot;
     private readonly List<ParkingRateRule> _rules = [];
+    private List<ParkingLot> _otherLots = [];
+    private string _copySourceLotId = string.Empty;
     private readonly ParkingRateCalculationType[] _calculationTypes = Enum.GetValues<ParkingRateCalculationType>();
 
     private bool _isLoading = true;
@@ -250,6 +284,8 @@ else
 
             if (_lot is not null)
             {
+                var allLots = await ParkingLotService.GetAllAsync();
+                _otherLots = allLots.Where(x => x.Id != ParkingLotId).ToList();
                 await LoadRulesAsync();
             }
         }
@@ -272,6 +308,7 @@ else
         {
             _rules.Clear();
             _rules.AddRange(await ParkingRateRuleService.GetRulesByLotAsync(ParkingLotId));
+            _newSequence = GetNextSequence();
         }
         catch (Exception ex)
         {
@@ -283,13 +320,36 @@ else
         }
     }
 
+    private async Task CopyRulesAsync()
+    {
+        ClearMessages();
+
+        if (!Guid.TryParse(_copySourceLotId, out var sourceLotId))
+        {
+            _errorMessage = "กรุณาเลือกลานต้นทาง";
+            return;
+        }
+
+        try
+        {
+            await ParkingRateRuleService.CopyRulesFromLotAsync(sourceLotId, ParkingLotId);
+            _copySourceLotId = string.Empty;
+            _successMessage = "คัดลอกอัตราค่าบริการสำเร็จ";
+            await LoadRulesAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
     private async Task AddRuleAsync()
     {
         ClearMessages();
 
         if (!TryBuildRuleInput(
             _newRuleName,
-            _newSequence,
+            GetNextSequence(),
             _newStartMinute,
             _newEndMinuteText,
             _newCalculationType,
@@ -501,7 +561,7 @@ else
     private void ResetNewForm()
     {
         _newRuleName = string.Empty;
-        _newSequence = _rules.Count + 1;
+        _newSequence = GetNextSequence();
         _newStartMinute = 0;
         _newEndMinuteText = string.Empty;
         _newCalculationType = ParkingRateCalculationType.Free;
@@ -510,6 +570,10 @@ else
         _newApplyOnOvernight = false;
         _newIsActive = true;
     }
+
+    private int GetNextSequence() => _rules.Count == 0
+        ? 1
+        : _rules.Max(x => x.Sequence) + 1;
 
     private static string GetCalculationTypeLabel(ParkingRateCalculationType type) => type switch
     {

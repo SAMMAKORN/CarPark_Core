@@ -34,6 +34,8 @@ namespace CarPark.Services
                 .AsNoTracking()
                 .AsSplitQuery()
                 .Include(x => x.ParkingLot)
+                .Include(x => x.InGate)
+                .Include(x => x.OutGate)
                 .Where(x => x.InAt >= utcStart && x.InAt < utcEnd)
                 .OrderBy(x => x.InAt)
                 .ToListAsync(cancellationToken);
@@ -50,6 +52,8 @@ namespace CarPark.Services
                 .AsNoTracking()
                 .AsSplitQuery()
                 .Include(x => x.ParkingLot)
+                .Include(x => x.InGate)
+                .Include(x => x.OutGate)
                 .Where(x => (x.InAt >= utcStart && x.InAt < utcEnd) || !x.OutAt.HasValue)
                 .OrderByDescending(x => x.InAt)
                 .ToListAsync(cancellationToken);
@@ -63,6 +67,8 @@ namespace CarPark.Services
                 .AsNoTracking()
                 .AsSplitQuery()
                 .Include(x => x.ParkingLot)
+                .Include(x => x.InGate)
+                .Include(x => x.OutGate)
                 .OrderByDescending(x => x.InAt)
                 .Take(Math.Clamp(take, 1, 200))
                 .ToListAsync(cancellationToken);
@@ -76,6 +82,8 @@ namespace CarPark.Services
                 .AsNoTracking()
                 .AsSplitQuery()
                 .Include(x => x.ParkingLot)
+                .Include(x => x.InGate)
+                .Include(x => x.OutGate)
                 .Where(x => x.OutAt == null)
                 .OrderByDescending(x => x.InAt)
                 .ToListAsync(cancellationToken);
@@ -144,6 +152,7 @@ namespace CarPark.Services
             Guid parkingLotId,
             string ticketNo,
             string plateNo,
+            Guid? inGateId = null,
             CancellationToken cancellationToken = default)
         {
             var normalizedTicketNo = NormalizeRequired(ticketNo, "Ticket number is required.");
@@ -169,6 +178,7 @@ namespace CarPark.Services
             var entity = new ParkingTransaction
             {
                 ParkingLotId = parkingLotId,
+                InGateId = inGateId,
                 TicketNo = normalizedTicketNo,
                 PlateNo = normalizedPlateNo,
                 InAt = DateTime.UtcNow,
@@ -225,6 +235,10 @@ namespace CarPark.Services
                 throw new InvalidOperationException("Invalid checkout time.");
             }
 
+            var lot = await db.ParkingLots
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == existing.ParkingLotId, cancellationToken);
+
             var cachedRules = currentUserContext.GetCachedRules(existing.ParkingLotId);
             var activeRules = cachedRules is not null
                 ? [.. cachedRules]
@@ -233,9 +247,10 @@ namespace CarPark.Services
                     .OrderBy(x => x.Sequence)
                     .ToListAsync(cancellationToken);
 
-            var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt);
+            var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt, lot);
 
             existing.OutAt = outAt;
+            existing.OutGateId = currentUserContext.CurrentGate?.Id;
             existing.TotalMinutes = chargeResult.TotalMinutes;
             existing.TotalAmount = chargeResult.TotalAmount;
             existing.IsOvernight = chargeResult.IsOvernight;
@@ -248,6 +263,8 @@ namespace CarPark.Services
             return await db.ParkingTransactions
                 .AsSplitQuery()
                 .Include(x => x.ParkingLot)
+                .Include(x => x.InGate)
+                .Include(x => x.OutGate)
                 .FirstAsync(x => x.Id == existing.Id, cancellationToken);
         }
 
@@ -261,12 +278,31 @@ namespace CarPark.Services
             return value.Trim();
         }
 
-        private static ChargeResult CalculateCharge(List<ParkingRateRule> rules, DateTime inAtUtc, DateTime outAtUtc)
+        private static ChargeResult CalculateCharge(List<ParkingRateRule> rules, DateTime inAtUtc, DateTime outAtUtc, ParkingLot? lot = null)
         {
             var totalMinutes = (int)Math.Ceiling((outAtUtc - inAtUtc).TotalMinutes);
             if (totalMinutes < 0)
             {
                 totalMinutes = 0;
+            }
+
+            // ถ้าลานมีเวลาทำการ และเวลาเข้าอยู่นอกเวลาทำการ → จอดฟรี
+            if (lot is not null && !lot.IsAllDay)
+            {
+                var inAtLocal = inAtUtc.ToLocalTime();
+                var inTime = TimeOnly.FromTimeSpan(inAtLocal.TimeOfDay);
+                var open = TimeOnly.FromTimeSpan(lot.OpenTime);
+                var close = TimeOnly.FromTimeSpan(lot.CloseTime);
+
+                var isOutsideHours = open <= close
+                    ? inTime < open || inTime >= close   // ช่วงปกติ เช่น 06:00–22:00
+                    : inTime < open && inTime >= close;  // ข้ามคืน เช่น 22:00–06:00
+
+                if (isOutsideHours)
+                {
+                    var isOvernightFree = inAtUtc.Date != outAtUtc.Date;
+                    return new ChargeResult(totalMinutes, 0m, isOvernightFree);
+                }
             }
 
             var regularRules = rules.Where(x => !x.ApplyOnOvernight).OrderBy(x => x.Sequence).ToList();

@@ -3,6 +3,7 @@
 @inject CurrentUserContext CurrentUserContext
 @inject ParkingLotService ParkingLotService
 @inject ParkingRateRuleService ParkingRateRuleService
+@inject ParkingGateService ParkingGateService
 @inject NavigationManager NavigationManager
 
 <PageTitle>เข้าสู่ระบบ</PageTitle>
@@ -36,14 +37,31 @@ else
 
                     <div class="mb-3">
                         <label class="form-label" for="parkinglot">ลานจอดรถ</label>
-                        <select class="form-select" id="parkinglot" @bind="_selectedParkingLotId">
+                        <select class="form-select" id="parkinglot"
+                                @bind="_selectedParkingLotId"
+                                @bind:after="OnLotChangedAsync">
                             <option value="">-- เลือกลานจอดรถ --</option>
                             @foreach (var lot in _parkingLots)
                             {
-                                <option value="@lot.Id">@lot.LotCode — @lot.LotName</option>
+                                var hours = lot.IsAllDay ? "ตลอดเวลา" : $"{lot.OpenTime.ToString(@"hh\:mm")}-{lot.CloseTime.ToString(@"hh\:mm")}";
+                                <option value="@lot.Id">@lot.LotCode — @lot.LotName (@hours)</option>
                             }
                         </select>
                     </div>
+
+                    @if (_gates.Count > 0)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label" for="gate">ประตู</label>
+                            <select class="form-select" id="gate" @bind="_selectedGateId">
+                                <option value="">-- เลือกประตู --</option>
+                                @foreach (var gate in _gates)
+                                {
+                                    <option value="@gate.Id">@gate.GateName</option>
+                                }
+                            </select>
+                        </div>
+                    }
 
                     <button class="btn btn-primary w-100" @onclick="LoginAsync">เข้าสู่ระบบ</button>
 
@@ -64,12 +82,25 @@ else
     private string _password = string.Empty;
     private string _errorMessage = string.Empty;
     private string _selectedParkingLotId = string.Empty;
+    private string _selectedGateId = string.Empty;
     private List<CarPark.Models.ParkingLot> _parkingLots = new();
+    private List<CarPark.Models.ParkingGate> _gates = new();
 
     protected override async Task OnInitializedAsync()
     {
         var all = await ParkingLotService.GetAllAsync();
         _parkingLots = all.Where(x => x.IsActive).ToList();
+    }
+
+    private async Task OnLotChangedAsync()
+    {
+        _selectedGateId = string.Empty;
+        _gates.Clear();
+
+        if (Guid.TryParse(_selectedParkingLotId, out var lotId))
+        {
+            _gates = await ParkingGateService.GetActiveByLotIdAsync(lotId);
+        }
     }
 
     private async Task LoginAsync()
@@ -88,6 +119,12 @@ else
             return;
         }
 
+        if (_gates.Count > 0 && string.IsNullOrWhiteSpace(_selectedGateId))
+        {
+            _errorMessage = "กรุณาเลือกประตู";
+            return;
+        }
+
         var user = await UserAuthService.LoginAsync(_username, _password);
         if (user is null)
         {
@@ -103,6 +140,9 @@ else
         }
 
         CurrentUserContext.SelectParkingLot(selectedLot);
+
+        var selectedGate = _gates.FirstOrDefault(x => x.Id.ToString() == _selectedGateId);
+        CurrentUserContext.SelectGate(selectedGate);
 
         var rules = await ParkingRateRuleService.GetActiveRulesByLotAsync(selectedLot.Id);
         CurrentUserContext.SetCachedRules(selectedLot.Id, rules);

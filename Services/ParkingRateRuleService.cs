@@ -98,6 +98,60 @@ namespace CarPark.Services
             currentUserContext.InvalidateCachedRules(existing.ParkingLotId);
         }
 
+        public async Task CopyRulesFromLotAsync(Guid sourceLotId, Guid targetLotId, CancellationToken cancellationToken = default)
+        {
+            if (sourceLotId == targetLotId)
+            {
+                throw new InvalidOperationException("ลานต้นทางและปลายทางต้องไม่เป็นลานเดียวกัน");
+            }
+
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            var sourceLotExists = await db.ParkingLots.AnyAsync(x => x.Id == sourceLotId, cancellationToken);
+            if (!sourceLotExists)
+            {
+                throw new InvalidOperationException("ไม่พบลานต้นทาง");
+            }
+
+            var sourceRules = await db.ParkingRateRules
+                .Where(x => x.ParkingLotId == sourceLotId)
+                .OrderBy(x => x.Sequence)
+                .ToListAsync(cancellationToken);
+
+            if (sourceRules.Count == 0)
+            {
+                throw new InvalidOperationException("ลานต้นทางไม่มีอัตราค่าบริการ");
+            }
+
+            var maxSeq = await db.ParkingRateRules
+                .Where(x => x.ParkingLotId == targetLotId)
+                .MaxAsync(x => (int?)x.Sequence, cancellationToken) ?? 0;
+
+            var now = DateTime.UtcNow;
+            for (var i = 0; i < sourceRules.Count; i++)
+            {
+                var src = sourceRules[i];
+                db.ParkingRateRules.Add(new ParkingRateRule
+                {
+                    ParkingLotId = targetLotId,
+                    RuleName = src.RuleName,
+                    Sequence = maxSeq + i + 1,
+                    StartMinute = src.StartMinute,
+                    EndMinute = src.EndMinute,
+                    CalculationType = src.CalculationType,
+                    Amount = src.Amount,
+                    BillingStepMinutes = src.BillingStepMinutes,
+                    ApplyOnOvernight = src.ApplyOnOvernight,
+                    IsActive = src.IsActive,
+                    CreateBy = currentUserContext.CurrentUserId,
+                    CreateAt = now
+                });
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+            currentUserContext.InvalidateCachedRules(targetLotId);
+        }
+
         public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
         {
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);

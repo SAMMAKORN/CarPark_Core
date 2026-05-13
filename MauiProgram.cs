@@ -42,6 +42,7 @@ namespace CarPark
             builder.Services.AddScoped<UserService>();
             builder.Services.AddScoped<ParkingLotService>();
             builder.Services.AddScoped<ParkingRateRuleService>();
+            builder.Services.AddScoped<ParkingGateService>();
             builder.Services.AddScoped<ParkingTransactionService>();
 
 #if DEBUG

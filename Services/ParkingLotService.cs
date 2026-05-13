@@ -25,6 +25,9 @@ namespace CarPark.Services
             {
                 LotCode = lot.LotCode.Trim(),
                 LotName = lot.LotName.Trim(),
+                IsAllDay = lot.IsAllDay,
+                OpenTime = lot.OpenTime,
+                CloseTime = lot.CloseTime,
                 IsActive = lot.IsActive,
                 CreateBy = currentUserContext.CurrentUserId,
                 CreateAt = DateTime.UtcNow
@@ -44,6 +47,9 @@ namespace CarPark.Services
 
             existing.LotCode = lot.LotCode.Trim();
             existing.LotName = lot.LotName.Trim();
+            existing.IsAllDay = lot.IsAllDay;
+            existing.OpenTime = lot.OpenTime;
+            existing.CloseTime = lot.CloseTime;
             existing.IsActive = lot.IsActive;
             existing.UpdateBy = currentUserContext.CurrentUserId;
             existing.UpdateAt = DateTime.UtcNow;

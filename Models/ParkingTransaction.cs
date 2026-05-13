@@ -23,6 +23,14 @@ namespace CarPark.Models
 
         public TransactionType Status { get; set; } = TransactionType.IN;
 
+        public Guid? InGateId { get; set; }
+
+        public Guid? OutGateId { get; set; }
+
         public ParkingLot? ParkingLot { get; set; }
+
+        public ParkingGate? InGate { get; set; }
+
+        public ParkingGate? OutGate { get; set; }
     }
 }

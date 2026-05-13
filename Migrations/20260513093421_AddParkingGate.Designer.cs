@@ -4,6 +4,7 @@ using CarPark.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CarPark.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260513093421_AddParkingGate")]
+    partial class AddParkingGate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -223,9 +226,6 @@ namespace CarPark.Migrations
                     b.Property<DateTime>("InAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("InGateId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -235,7 +235,7 @@ namespace CarPark.Migrations
                     b.Property<DateTime?>("OutAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("OutGateId")
+                    b.Property<Guid?>("ParkingGateId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("ParkingLotId")
@@ -270,9 +270,7 @@ namespace CarPark.Migrations
 
                     b.HasIndex("DeletedBy");
 
-                    b.HasIndex("InGateId");
-
-                    b.HasIndex("OutGateId");
+                    b.HasIndex("ParkingGateId");
 
                     b.HasIndex("ParkingLotId");
 
@@ -307,11 +305,13 @@ namespace CarPark.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<string>("Password")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<int>("Role")
                         .HasColumnType("int");
@@ -324,7 +324,8 @@ namespace CarPark.Migrations
 
                     b.Property<string>("Username")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
@@ -333,6 +334,9 @@ namespace CarPark.Migrations
                     b.HasIndex("DeletedBy");
 
                     b.HasIndex("UpdateBy");
+
+                    b.HasIndex("Username")
+                        .IsUnique();
 
                     b.ToTable("Users", (string)null);
 
@@ -347,6 +351,28 @@ namespace CarPark.Migrations
                             Password = "PBKDF2$SHA256$100000$CNMtqGjCwsaY4gv7R9CXhw==$lGxIuuvrpQU4rT2dzxg8Y7sbv2kmTK8mG2kMgrOUMc4=",
                             Role = 0,
                             Username = "admin"
+                        },
+                        new
+                        {
+                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                            CreateAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsDeleted = false,
+                            MustChangePassword = true,
+                            Name = "Normal User",
+                            Password = "PBKDF2$SHA256$100000$W6wNPlF5a8q79g6h3inyRQ==$0N6YuOugjBTtdFCNrIBjdkXyi9B7xVfx6a75yU147r4=",
+                            Role = 1,
+                            Username = "user"
+                        },
+                        new
+                        {
+                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
+                            CreateAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsDeleted = false,
+                            MustChangePassword = true,
+                            Name = "Parking Operator",
+                            Password = "PBKDF2$SHA256$100000$ITDALgYVh6dezGnLr7jgFg==$Gu2S3x9mUOixGYSLAxZQqQUc1dU2xzIY2mUGT/aiYks=",
+                            Role = 1,
+                            Username = "operator"
                         });
                 });
 
@@ -439,14 +465,9 @@ namespace CarPark.Migrations
                         .WithMany()
                         .HasForeignKey("DeletedBy");
 
-                    b.HasOne("CarPark.Models.ParkingGate", "InGate")
-                        .WithMany()
-                        .HasForeignKey("InGateId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("CarPark.Models.ParkingGate", "OutGate")
-                        .WithMany()
-                        .HasForeignKey("OutGateId")
+                    b.HasOne("CarPark.Models.ParkingGate", "ParkingGate")
+                        .WithMany("Transactions")
+                        .HasForeignKey("ParkingGateId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("CarPark.Models.ParkingLot", "ParkingLot")
@@ -463,9 +484,7 @@ namespace CarPark.Migrations
 
                     b.Navigation("DeletedByUser");
 
-                    b.Navigation("InGate");
-
-                    b.Navigation("OutGate");
+                    b.Navigation("ParkingGate");
 
                     b.Navigation("ParkingLot");
 
@@ -491,6 +510,11 @@ namespace CarPark.Migrations
                     b.Navigation("DeletedByUser");
 
                     b.Navigation("UpdateByUser");
+                });
+
+            modelBuilder.Entity("CarPark.Models.ParkingGate", b =>
+                {
+                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("CarPark.Models.ParkingLot", b =>

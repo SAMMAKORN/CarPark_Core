@@ -18,6 +18,7 @@ namespace CarPark.Services
         private string _currentUsername;
         private bool _mustChangePassword;
         private ParkingLot? _currentParkingLot;
+        private ParkingGate? _currentGate;
         private Guid? _cachedRulesLotId;
         private List<ParkingRateRule>? _cachedRules;
 
@@ -53,6 +54,8 @@ namespace CarPark.Services
         public bool IsAuthenticated => _currentUserId.HasValue;
         public bool IsAdmin => _currentRole == Role.Admin;
         public ParkingLot? CurrentParkingLot => _currentParkingLot;
+        public ParkingGate? CurrentGate => _currentGate;
+
         public IReadOnlyList<ParkingRateRule>? GetCachedRules(Guid lotId)
             => _cachedRulesLotId == lotId ? _cachedRules?.AsReadOnly() : null;
 
@@ -68,6 +71,12 @@ namespace CarPark.Services
         public void SelectParkingLot(ParkingLot lot)
         {
             _currentParkingLot = lot;
+            _currentGate = null;
+        }
+
+        public void SelectGate(ParkingGate? gate)
+        {
+            _currentGate = gate;
         }
 
         public void SetCachedRules(Guid lotId, List<ParkingRateRule> rules)
@@ -98,6 +107,7 @@ namespace CarPark.Services
             _currentUsername = _defaultUsername;
             _mustChangePassword = _defaultMustChangePassword;
             _currentParkingLot = null;
+            _currentGate = null;
             _cachedRulesLotId = null;
             _cachedRules = null;
         }
