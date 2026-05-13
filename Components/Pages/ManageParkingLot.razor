@@ -132,6 +132,7 @@ else
                                         <td>@(lot.IsActive ? "ใช้งาน" : "ปิดใช้งาน")</td>
                                         <td class="text-end">
                                             <a class="btn btn-sm btn-outline-secondary me-2" href="@($"/manage/parking-lot/{lot.Id}/gates")">ประตู</a>
+                                            <a class="btn btn-sm btn-outline-info me-2" href="@($"/manage/parking-lot/{lot.Id}/schedules")">ตารางเวลา</a>
                                             <a class="btn btn-sm btn-outline-dark me-2" href="@($"/manage/parking-lot/{lot.Id}/rate-rules")">อัตราค่าบริการ</a>
                                             <button class="btn btn-sm btn-outline-primary me-2" @onclick="@(() => StartEdit(lot))">แก้ไข</button>
                                             <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteLotAsync(lot.Id))">ลบ</button>

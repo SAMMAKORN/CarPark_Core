@@ -239,6 +239,15 @@ namespace CarPark.Services
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == existing.ParkingLotId, cancellationToken);
 
+            var schedules = await db.ParkingLotSchedules
+                .AsNoTracking()
+                .Where(x => x.ParkingLotId == existing.ParkingLotId && x.IsActive)
+                .ToListAsync(cancellationToken);
+
+            var inAtLocal = existing.InAt.ToLocalTime();
+            var inDayBit = ParkingLotScheduleService.DayOfWeekToBit(inAtLocal.DayOfWeek);
+            var matchedSchedule = schedules.FirstOrDefault(s => (s.DaysOfWeek & inDayBit) != 0);
+
             var cachedRules = currentUserContext.GetCachedRules(existing.ParkingLotId);
             var activeRules = cachedRules is not null
                 ? [.. cachedRules]
@@ -247,7 +256,7 @@ namespace CarPark.Services
                     .OrderBy(x => x.Sequence)
                     .ToListAsync(cancellationToken);
 
-            var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt, lot);
+            var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt, lot, matchedSchedule);
 
             existing.OutAt = outAt;
             existing.OutGateId = currentUserContext.CurrentGate?.Id;
@@ -278,31 +287,50 @@ namespace CarPark.Services
             return value.Trim();
         }
 
-        private static ChargeResult CalculateCharge(List<ParkingRateRule> rules, DateTime inAtUtc, DateTime outAtUtc, ParkingLot? lot = null)
+        private static ChargeResult CalculateCharge(
+            List<ParkingRateRule> allRules,
+            DateTime inAtUtc,
+            DateTime outAtUtc,
+            ParkingLot? lot = null,
+            ParkingLotSchedule? matchedSchedule = null)
         {
             var totalMinutes = (int)Math.Ceiling((outAtUtc - inAtUtc).TotalMinutes);
-            if (totalMinutes < 0)
+            if (totalMinutes < 0) totalMinutes = 0;
+
+            // กำหนดเวลาทำการและกฎที่ใช้ตาม schedule (ถ้ามี) หรือ lot (fallback)
+            bool isAllDay;
+            TimeSpan openTime, closeTime;
+            List<ParkingRateRule> rules;
+
+            if (matchedSchedule is not null)
             {
-                totalMinutes = 0;
+                isAllDay = matchedSchedule.IsAllDay;
+                openTime = matchedSchedule.OpenTime;
+                closeTime = matchedSchedule.CloseTime;
+                rules = allRules.Where(r => r.ParkingScheduleId == matchedSchedule.Id).ToList();
+            }
+            else
+            {
+                isAllDay = lot?.IsAllDay ?? true;
+                openTime = lot?.OpenTime ?? default;
+                closeTime = lot?.CloseTime ?? default;
+                rules = allRules.Where(r => r.ParkingScheduleId == null).ToList();
             }
 
-            // ถ้าลานมีเวลาทำการ และเวลาเข้าอยู่นอกเวลาทำการ → จอดฟรี
-            if (lot is not null && !lot.IsAllDay)
+            // ถ้าเวลาเข้าอยู่นอกเวลาทำการ → จอดฟรี
+            if (!isAllDay)
             {
                 var inAtLocal = inAtUtc.ToLocalTime();
                 var inTime = TimeOnly.FromTimeSpan(inAtLocal.TimeOfDay);
-                var open = TimeOnly.FromTimeSpan(lot.OpenTime);
-                var close = TimeOnly.FromTimeSpan(lot.CloseTime);
+                var open = TimeOnly.FromTimeSpan(openTime);
+                var close = TimeOnly.FromTimeSpan(closeTime);
 
-                var isOutsideHours = open <= close
-                    ? inTime < open || inTime >= close   // ช่วงปกติ เช่น 06:00–22:00
-                    : inTime < open && inTime >= close;  // ข้ามคืน เช่น 22:00–06:00
+                var isOutside = open <= close
+                    ? inTime < open || inTime >= close
+                    : inTime < open && inTime >= close;
 
-                if (isOutsideHours)
-                {
-                    var isOvernightFree = inAtUtc.Date != outAtUtc.Date;
-                    return new ChargeResult(totalMinutes, 0m, isOvernightFree);
-                }
+                if (isOutside)
+                    return new ChargeResult(totalMinutes, 0m, inAtUtc.Date != outAtUtc.Date);
             }
 
             var regularRules = rules.Where(x => !x.ApplyOnOvernight).OrderBy(x => x.Sequence).ToList();

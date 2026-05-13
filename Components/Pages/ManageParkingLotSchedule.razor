@@ -1,0 +1,358 @@
+@page "/manage/parking-lot/{ParkingLotId:guid}/schedules"
+@inject CurrentUserContext CurrentUserContext
+@inject ParkingLotScheduleService ScheduleService
+@inject ParkingLotService ParkingLotService
+
+<PageTitle>ตารางเวลา</PageTitle>
+
+<div class="view-head">
+    <h1>ตารางเวลา</h1>
+    <p class="view-subtitle">กำหนดช่วงวัน เวลาทำการ และอัตราค่าบริการตามประเภทวัน</p>
+</div>
+
+@if (!CurrentUserContext.IsAdmin)
+{
+    <div class="alert alert-danger" role="alert">ไม่มีสิทธิ์เข้าใช้งาน</div>
+}
+else if (!_isLotLoaded)
+{
+    <p>กำลังโหลด...</p>
+}
+else if (_lot is null)
+{
+    <div class="alert alert-danger" role="alert">ไม่พบลานจอดรถ</div>
+    <a class="btn btn-secondary" href="/manage/parking-lot">กลับ</a>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="card-title mb-1">@_lot.LotCode - @_lot.LotName</h5>
+                <small class="text-muted">ตารางเวลาแต่ละช่วงวันมีอัตราค่าบริการของตัวเอง วันที่ไม่ได้ระบุจะใช้อัตราทั่วไปของลาน</small>
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-dark" href="@($"/manage/parking-lot/{ParkingLotId}/rate-rules")">อัตราค่าบริการทั่วไป</a>
+                <a class="btn btn-outline-secondary" href="/manage/parking-lot">กลับสู่รายการลาน</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add schedule form -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">เพิ่มตารางเวลา</h5>
+
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">ชื่อตารางเวลา</label>
+                    <input class="form-control" @bind="_newName" placeholder="เช่น วันธรรมดา, วันหยุด" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">วันที่ใช้งาน</label>
+                    <div class="d-flex gap-2 flex-wrap mt-1">
+                        @foreach (var (bit, label) in _dayOptions)
+                        {
+                            var b = bit;
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="new_@b"
+                                       checked="@((_newDays & b) != 0)"
+                                       @onchange="e => ToggleNewDay(b, (bool)(e.Value ?? false))" />
+                                <label class="form-check-label" for="new_@b">@label</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" id="newAllDay" @bind="_newIsAllDay" />
+                        <label class="form-check-label" for="newAllDay">ตลอดเวลา</label>
+                    </div>
+                </div>
+            </div>
+
+            @if (!_newIsAllDay)
+            {
+                <div class="row g-2 mt-1">
+                    <div class="col-md-2">
+                        <label class="form-label">เวลาเปิด</label>
+                        <input class="form-control" type="time" @bind="_newOpenTime" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">เวลาปิด</label>
+                        <input class="form-control" type="time" @bind="_newCloseTime" />
+                    </div>
+                </div>
+            }
+
+            <div class="row g-2 mt-2">
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" @onclick="AddScheduleAsync">เพิ่มตารางเวลา</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule list -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">รายการตารางเวลา</h5>
+
+            @if (_isLoading)
+            {
+                <p>กำลังโหลด...</p>
+            }
+            else if (_schedules.Count == 0)
+            {
+                <p class="text-muted">ยังไม่มีตารางเวลา — ใช้อัตราค่าบริการทั่วไปของลานทุกวัน</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>ชื่อ</th>
+                                <th>วันที่ใช้งาน</th>
+                                <th>เวลาทำการ</th>
+                                <th>ใช้งาน</th>
+                                <th class="text-end">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in _schedules)
+                            {
+                                @if (_editingId == s.Id)
+                                {
+                                    <tr class="table-warning">
+                                        <td><input class="form-control" @bind="_editName" /></td>
+                                        <td>
+                                            <div class="d-flex gap-1 flex-wrap">
+                                                @foreach (var (bit, label) in _dayOptions)
+                                                {
+                                                    var b = bit;
+                                                    <div class="form-check form-check-inline mb-0">
+                                                        <input class="form-check-input" type="checkbox" id="edit_@(s.Id)_@b"
+                                                               checked="@((_editDays & b) != 0)"
+                                                               @onchange="e => ToggleEditDay(b, (bool)(e.Value ?? false))" />
+                                                        <label class="form-check-label" for="edit_@(s.Id)_@b">@label</label>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="form-check mb-0">
+                                                    <input class="form-check-input" type="checkbox" id="editAllDay_@s.Id" @bind="_editIsAllDay" />
+                                                    <label class="form-check-label" for="editAllDay_@s.Id">ตลอดเวลา</label>
+                                                </div>
+                                                @if (!_editIsAllDay)
+                                                {
+                                                    <input class="form-control form-control-sm" type="time" style="width:110px" @bind="_editOpenTime" />
+                                                    <span>-</span>
+                                                    <input class="form-control form-control-sm" type="time" style="width:110px" @bind="_editCloseTime" />
+                                                }
+                                            </div>
+                                        </td>
+                                        <td><input class="form-check-input" type="checkbox" @bind="_editIsActive" /></td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-success me-2" @onclick="SaveEditAsync">บันทึก</button>
+                                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">ยกเลิก</button>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td>@s.ScheduleName</td>
+                                        <td>
+                                            <span class="text-muted">@ParkingLotScheduleService.GetDayNames((CarPark.Shared.Enums.WeekDays)s.DaysOfWeek)</span>
+                                        </td>
+                                        <td>
+                                            @if (s.IsAllDay)
+                                            {
+                                                <span class="badge bg-info text-dark">ตลอดเวลา</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@s.OpenTime.ToString(@"hh\:mm") - @s.CloseTime.ToString(@"hh\:mm")</span>
+                                            }
+                                        </td>
+                                        <td>@(s.IsActive ? "ใช้งาน" : "ปิด")</td>
+                                        <td class="text-end">
+                                            <a class="btn btn-sm btn-outline-dark me-1"
+                                               href="@($"/manage/parking-lot/{ParkingLotId}/schedules/{s.Id}/rate-rules")">
+                                                อัตราค่าบริการ
+                                            </a>
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="@(() => StartEdit(s))">แก้ไข</button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteAsync(s.Id))">ลบ</button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger mt-3" role="alert">@_errorMessage</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mt-3" role="alert">@_successMessage</div>
+    }
+}
+
+@code {
+    [Parameter] public Guid ParkingLotId { get; set; }
+
+    private ParkingLot? _lot;
+    private readonly List<ParkingLotSchedule> _schedules = [];
+    private bool _isLoading = true;
+    private bool _isLotLoaded;
+
+    // day options: (bitmask, label)
+    private readonly (int bit, string label)[] _dayOptions =
+    [
+        (1,  "จ"), (2,  "อ"), (4,  "พ"), (8,  "พฤ"),
+        (16, "ศ"), (32, "ส"), (64, "อา")
+    ];
+
+    // New form
+    private string  _newName    = string.Empty;
+    private int     _newDays;
+    private bool    _newIsAllDay = false;
+    private TimeOnly _newOpenTime  = new(6, 0);
+    private TimeOnly _newCloseTime = new(22, 0);
+
+    // Edit form
+    private Guid?   _editingId;
+    private string  _editName    = string.Empty;
+    private int     _editDays;
+    private bool    _editIsAllDay;
+    private TimeOnly _editOpenTime  = new(6, 0);
+    private TimeOnly _editCloseTime = new(22, 0);
+    private bool    _editIsActive = true;
+
+    private string _errorMessage   = string.Empty;
+    private string _successMessage = string.Empty;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!CurrentUserContext.IsAdmin) { _isLotLoaded = true; _isLoading = false; return; }
+
+        ClearMessages();
+        _isLoading = true; _isLotLoaded = false;
+
+        try
+        {
+            var lots = await ParkingLotService.GetAllAsync();
+            _lot = lots.FirstOrDefault(x => x.Id == ParkingLotId);
+            _isLotLoaded = true;
+            if (_lot is not null) await LoadSchedulesAsync();
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; _isLotLoaded = true; }
+        finally { _isLoading = false; }
+    }
+
+    private async Task LoadSchedulesAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var list = await ScheduleService.GetByLotIdAsync(ParkingLotId);
+            _schedules.Clear();
+            _schedules.AddRange(list);
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _isLoading = false; }
+    }
+
+    private void ToggleNewDay(int bit, bool on)
+        => _newDays = on ? _newDays | bit : _newDays & ~bit;
+
+    private void ToggleEditDay(int bit, bool on)
+        => _editDays = on ? _editDays | bit : _editDays & ~bit;
+
+    private async Task AddScheduleAsync()
+    {
+        ClearMessages();
+        try
+        {
+            await ScheduleService.CreateAsync(new ParkingLotSchedule
+            {
+                ParkingLotId = ParkingLotId,
+                ScheduleName = _newName,
+                DaysOfWeek   = _newDays,
+                IsAllDay     = _newIsAllDay,
+                OpenTime     = _newOpenTime.ToTimeSpan(),
+                CloseTime    = _newCloseTime.ToTimeSpan(),
+                IsActive     = true
+            });
+            _newName = string.Empty; _newDays = 0;
+            _newIsAllDay = false;
+            _newOpenTime = new(6, 0); _newCloseTime = new(22, 0);
+            _successMessage = "เพิ่มตารางเวลาสำเร็จ";
+            await LoadSchedulesAsync();
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+    }
+
+    private void StartEdit(ParkingLotSchedule s)
+    {
+        ClearMessages();
+        _editingId    = s.Id;
+        _editName     = s.ScheduleName;
+        _editDays     = s.DaysOfWeek;
+        _editIsAllDay = s.IsAllDay;
+        _editOpenTime  = TimeOnly.FromTimeSpan(s.OpenTime);
+        _editCloseTime = TimeOnly.FromTimeSpan(s.CloseTime);
+        _editIsActive = s.IsActive;
+    }
+
+    private void CancelEdit() => _editingId = null;
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingId is null) return;
+        ClearMessages();
+        try
+        {
+            await ScheduleService.UpdateAsync(new ParkingLotSchedule
+            {
+                Id           = _editingId.Value,
+                ParkingLotId = ParkingLotId,
+                ScheduleName = _editName,
+                DaysOfWeek   = _editDays,
+                IsAllDay     = _editIsAllDay,
+                OpenTime     = _editOpenTime.ToTimeSpan(),
+                CloseTime    = _editCloseTime.ToTimeSpan(),
+                IsActive     = _editIsActive
+            });
+            _successMessage = "แก้ไขตารางเวลาสำเร็จ";
+            CancelEdit();
+            await LoadSchedulesAsync();
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        ClearMessages();
+        try
+        {
+            await ScheduleService.DeleteAsync(id);
+            _successMessage = "ลบตารางเวลาสำเร็จ";
+            await LoadSchedulesAsync();
+        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+    }
+
+    private void ClearMessages() { _errorMessage = string.Empty; _successMessage = string.Empty; }
+}

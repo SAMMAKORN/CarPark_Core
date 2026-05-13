@@ -19,5 +19,7 @@ namespace CarPark.Models
         public ICollection<ParkingRateRule> RateRules { get; set; } = new List<ParkingRateRule>();
 
         public ICollection<ParkingGate> Gates { get; set; } = new List<ParkingGate>();
+
+        public ICollection<ParkingLotSchedule> Schedules { get; set; } = new List<ParkingLotSchedule>();
     }
 }

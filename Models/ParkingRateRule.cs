@@ -25,6 +25,11 @@ namespace CarPark.Models
 
         public bool IsActive { get; set; } = true;
 
+        /// <summary>null = กฎทั่วไปของลาน, มีค่า = กฎเฉพาะ schedule นั้น</summary>
+        public Guid? ParkingScheduleId { get; set; }
+
         public ParkingLot? ParkingLot { get; set; }
+
+        public ParkingLotSchedule? ParkingSchedule { get; set; }
     }
 }

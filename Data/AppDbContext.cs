@@ -19,6 +19,27 @@ namespace CarPark.Data
                 entity.Property(x => x.CloseTime).HasColumnType("time");
             });
 
+            modelBuilder.Entity<ParkingLotSchedule>(entity =>
+            {
+                entity.ToTable("ParkingLotSchedules");
+                entity.Property(x => x.ScheduleName).HasMaxLength(100).IsRequired();
+                entity.Property(x => x.OpenTime).HasColumnType("time");
+                entity.Property(x => x.CloseTime).HasColumnType("time");
+                entity.HasOne(x => x.ParkingLot)
+                    .WithMany(x => x.Schedules)
+                    .HasForeignKey(x => x.ParkingLotId)
+                    .OnDelete(DeleteBehavior.NoAction);
+            });
+
+            modelBuilder.Entity<ParkingRateRule>(entity =>
+            {
+                entity.HasOne(x => x.ParkingSchedule)
+                    .WithMany(x => x.RateRules)
+                    .HasForeignKey(x => x.ParkingScheduleId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.NoAction);
+            });
+
             modelBuilder.Entity<ParkingGate>(entity =>
             {
                 entity.ToTable("ParkingGates");
@@ -92,6 +113,7 @@ namespace CarPark.Data
         public DbSet<ParkingTransaction> ParkingTransactions { get; set; }
         public DbSet<ParkingLot> ParkingLots { get; set; }
         public DbSet<ParkingGate> ParkingGates { get; set; }
+        public DbSet<ParkingLotSchedule> ParkingLotSchedules { get; set; }
         public DbSet<ParkingRateRule> ParkingRateRules { get; set; }
         public DbSet<User> Users { get; set; }
     }

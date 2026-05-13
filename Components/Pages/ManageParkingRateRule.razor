@@ -1,7 +1,9 @@
 @page "/manage/parking-lot/{ParkingLotId:guid}/rate-rules"
+@page "/manage/parking-lot/{ParkingLotId:guid}/schedules/{ScheduleId:guid}/rate-rules"
 @inject CurrentUserContext CurrentUserContext
 @inject ParkingRateRuleService ParkingRateRuleService
 @inject ParkingLotService ParkingLotService
+@inject ParkingLotScheduleService ScheduleService
 
 <PageTitle>จัดการอัตราค่าบริการ</PageTitle>
 
@@ -34,11 +36,22 @@ else
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h5 class="card-title mb-1">@_lot.LotCode - @_lot.LotName</h5>
-                    <small class="text-muted">รายละเอียดอัตราค่าบริการสำหรับลานจอดรถที่เลือก</small>
+                    @if (_schedule is not null)
+                    {
+                        <div class="badge bg-primary fs-6 mt-1">
+                            ตารางเวลา: @_schedule.ScheduleName
+                            (@ParkingLotScheduleService.GetDayNames((CarPark.Shared.Enums.WeekDays)_schedule.DaysOfWeek))
+                        </div>
+                    }
+                    else
+                    {
+                        <small class="text-muted">อัตราค่าบริการทั่วไป (วันที่ไม่มีตารางเวลาเฉพาะ)</small>
+                    }
                 </div>
                 <div class="d-flex gap-2">
+                    <a class="btn btn-outline-dark" href="@($"/manage/parking-lot/{ParkingLotId}/schedules")">ตารางเวลา</a>
                     <a class="btn btn-outline-secondary" href="@($"/manage/parking-lot/{ParkingLotId}/gates")">ประตู</a>
-                    <a class="btn btn-outline-secondary" href="/manage/parking-lot">กลับสู่รายการลานจอดรถ</a>
+                    <a class="btn btn-outline-secondary" href="/manage/parking-lot">กลับสู่รายการลาน</a>
                 </div>
             </div>
         </div>
@@ -223,10 +236,11 @@ else
 }
 
 @code {
-    [Parameter]
-    public Guid ParkingLotId { get; set; }
+    [Parameter] public Guid ParkingLotId { get; set; }
+    [Parameter] public Guid? ScheduleId { get; set; }
 
     private ParkingLot? _lot;
+    private ParkingLotSchedule? _schedule;
     private readonly List<ParkingRateRule> _rules = [];
     private List<ParkingLot> _otherLots = [];
     private string _copySourceLotId = string.Empty;
@@ -286,6 +300,10 @@ else
             {
                 var allLots = await ParkingLotService.GetAllAsync();
                 _otherLots = allLots.Where(x => x.Id != ParkingLotId).ToList();
+
+                if (ScheduleId.HasValue)
+                    _schedule = await ScheduleService.GetByIdAsync(ScheduleId.Value);
+
                 await LoadRulesAsync();
             }
         }
@@ -307,7 +325,7 @@ else
         try
         {
             _rules.Clear();
-            _rules.AddRange(await ParkingRateRuleService.GetRulesByLotAsync(ParkingLotId));
+            _rules.AddRange(await ParkingRateRuleService.GetRulesByLotAsync(ParkingLotId, ScheduleId));
             _newSequence = GetNextSequence();
         }
         catch (Exception ex)
@@ -363,6 +381,7 @@ else
         }
 
         rule.ParkingLotId = ParkingLotId;
+        rule.ParkingScheduleId = ScheduleId;
 
         try
         {
@@ -432,6 +451,7 @@ else
 
         rule.Id = _editingRuleId.Value;
         rule.ParkingLotId = ParkingLotId;
+        rule.ParkingScheduleId = ScheduleId;
 
         try
         {

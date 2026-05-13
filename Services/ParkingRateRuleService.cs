@@ -25,6 +25,7 @@ namespace CarPark.Services
                 .FirstOrDefaultAsync(x => x.Id == parkingLotId, cancellationToken);
         }
 
+        /// <summary>คืน rules ทั้งหมด (global + schedule) ใช้ cache ที่ login</summary>
         public async Task<List<ParkingRateRule>> GetActiveRulesByLotAsync(Guid parkingLotId, CancellationToken cancellationToken = default)
         {
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -35,12 +36,13 @@ namespace CarPark.Services
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<List<ParkingRateRule>> GetRulesByLotAsync(Guid parkingLotId, CancellationToken cancellationToken = default)
+        /// <summary>คืน rules ของ lot+schedule สำหรับแสดงในหน้าจัดการ</summary>
+        public async Task<List<ParkingRateRule>> GetRulesByLotAsync(Guid parkingLotId, Guid? scheduleId = null, CancellationToken cancellationToken = default)
         {
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
             return await db.ParkingRateRules
-                .Where(x => x.ParkingLotId == parkingLotId)
+                .Where(x => x.ParkingLotId == parkingLotId && x.ParkingScheduleId == scheduleId)
                 .OrderBy(x => x.Sequence)
                 .ToListAsync(cancellationToken);
         }
@@ -54,6 +56,7 @@ namespace CarPark.Services
             var entity = new ParkingRateRule
             {
                 ParkingLotId = rule.ParkingLotId,
+                ParkingScheduleId = rule.ParkingScheduleId,
                 RuleName = rule.RuleName.Trim(),
                 Sequence = rule.Sequence,
                 StartMinute = rule.StartMinute,
@@ -98,33 +101,29 @@ namespace CarPark.Services
             currentUserContext.InvalidateCachedRules(existing.ParkingLotId);
         }
 
-        public async Task CopyRulesFromLotAsync(Guid sourceLotId, Guid targetLotId, CancellationToken cancellationToken = default)
+        /// <summary>Copy global rules (ParkingScheduleId = null) จาก lot ต้นทางไปยังปลายทาง</summary>
+        public async Task CopyRulesFromLotAsync(Guid sourceLotId, Guid targetLotId, Guid? targetScheduleId = null, CancellationToken cancellationToken = default)
         {
-            if (sourceLotId == targetLotId)
-            {
+            if (sourceLotId == targetLotId && targetScheduleId == null)
                 throw new InvalidOperationException("ลานต้นทางและปลายทางต้องไม่เป็นลานเดียวกัน");
-            }
 
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
             var sourceLotExists = await db.ParkingLots.AnyAsync(x => x.Id == sourceLotId, cancellationToken);
             if (!sourceLotExists)
-            {
                 throw new InvalidOperationException("ไม่พบลานต้นทาง");
-            }
 
+            // Copy only global rules from source lot
             var sourceRules = await db.ParkingRateRules
-                .Where(x => x.ParkingLotId == sourceLotId)
+                .Where(x => x.ParkingLotId == sourceLotId && x.ParkingScheduleId == null)
                 .OrderBy(x => x.Sequence)
                 .ToListAsync(cancellationToken);
 
             if (sourceRules.Count == 0)
-            {
-                throw new InvalidOperationException("ลานต้นทางไม่มีอัตราค่าบริการ");
-            }
+                throw new InvalidOperationException("ลานต้นทางไม่มีอัตราค่าบริการทั่วไป");
 
             var maxSeq = await db.ParkingRateRules
-                .Where(x => x.ParkingLotId == targetLotId)
+                .Where(x => x.ParkingLotId == targetLotId && x.ParkingScheduleId == targetScheduleId)
                 .MaxAsync(x => (int?)x.Sequence, cancellationToken) ?? 0;
 
             var now = DateTime.UtcNow;
@@ -134,6 +133,7 @@ namespace CarPark.Services
                 db.ParkingRateRules.Add(new ParkingRateRule
                 {
                     ParkingLotId = targetLotId,
+                    ParkingScheduleId = targetScheduleId,
                     RuleName = src.RuleName,
                     Sequence = maxSeq + i + 1,
                     StartMinute = src.StartMinute,
@@ -170,64 +170,46 @@ namespace CarPark.Services
             currentUserContext.InvalidateCachedRules(existing.ParkingLotId);
         }
 
-        private static async Task ValidateAsync(
-            AppDbContext db,
-            ParkingRateRule rule,
-            Guid? currentRuleId,
-            CancellationToken cancellationToken)
+        // ─── Private ────────────────────────────────────────────────────
+
+        private static async Task ValidateAsync(AppDbContext db, ParkingRateRule rule, Guid? currentRuleId, CancellationToken cancellationToken)
         {
             if (rule.ParkingLotId == Guid.Empty)
-            {
                 throw new InvalidOperationException("Parking lot is required.");
-            }
 
             var lotExists = await db.ParkingLots.AnyAsync(x => x.Id == rule.ParkingLotId, cancellationToken);
             if (!lotExists)
-            {
                 throw new InvalidOperationException("Parking lot not found.");
-            }
 
             if (string.IsNullOrWhiteSpace(rule.RuleName))
-            {
                 throw new InvalidOperationException("Rule name is required.");
-            }
 
             if (rule.Sequence <= 0)
-            {
                 throw new InvalidOperationException("Sequence must be greater than 0.");
-            }
 
             if (rule.StartMinute < 0)
-            {
                 throw new InvalidOperationException("Start minute must be 0 or greater.");
-            }
 
             if (rule.EndMinute.HasValue && rule.EndMinute.Value < rule.StartMinute)
-            {
                 throw new InvalidOperationException("End minute must be greater than or equal to start minute.");
-            }
 
             if (rule.Amount < 0)
-            {
                 throw new InvalidOperationException("Amount must be 0 or greater.");
-            }
 
             if (rule.BillingStepMinutes.HasValue && rule.BillingStepMinutes.Value <= 0)
-            {
                 throw new InvalidOperationException("Billing step minutes must be greater than 0.");
-            }
 
+            // Sequence unique within same (lot, schedule) group
             var sequenceExists = await db.ParkingRateRules
                 .AnyAsync(
                     x => x.ParkingLotId == rule.ParkingLotId
+                         && x.ParkingScheduleId == rule.ParkingScheduleId
                          && x.Sequence == rule.Sequence
                          && (!currentRuleId.HasValue || x.Id != currentRuleId.Value),
                     cancellationToken);
 
             if (sequenceExists)
-            {
-                throw new InvalidOperationException("This sequence already exists in the selected parking lot.");
-            }
+                throw new InvalidOperationException("ลำดับนี้มีอยู่แล้วในกลุ่มนี้");
         }
     }
 }
