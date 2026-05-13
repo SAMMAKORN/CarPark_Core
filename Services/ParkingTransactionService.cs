@@ -225,10 +225,13 @@ namespace CarPark.Services
                 throw new InvalidOperationException("Invalid checkout time.");
             }
 
-            var activeRules = await db.ParkingRateRules
-                .Where(x => x.ParkingLotId == existing.ParkingLotId && x.IsActive)
-                .OrderBy(x => x.Sequence)
-                .ToListAsync(cancellationToken);
+            var cachedRules = currentUserContext.GetCachedRules(existing.ParkingLotId);
+            var activeRules = cachedRules is not null
+                ? [.. cachedRules]
+                : await db.ParkingRateRules
+                    .Where(x => x.ParkingLotId == existing.ParkingLotId && x.IsActive)
+                    .OrderBy(x => x.Sequence)
+                    .ToListAsync(cancellationToken);
 
             var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt);
 

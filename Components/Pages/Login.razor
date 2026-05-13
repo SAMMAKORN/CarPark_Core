@@ -2,6 +2,7 @@
 @inject UserAuthService UserAuthService
 @inject CurrentUserContext CurrentUserContext
 @inject ParkingLotService ParkingLotService
+@inject ParkingRateRuleService ParkingRateRuleService
 @inject NavigationManager NavigationManager
 
 <PageTitle>เข้าสู่ระบบ</PageTitle>
@@ -102,6 +103,9 @@ else
         }
 
         CurrentUserContext.SelectParkingLot(selectedLot);
+
+        var rules = await ParkingRateRuleService.GetActiveRulesByLotAsync(selectedLot.Id);
+        CurrentUserContext.SetCachedRules(selectedLot.Id, rules);
 
         NavigationManager.NavigateTo("/");
     }

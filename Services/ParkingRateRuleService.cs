@@ -25,6 +25,16 @@ namespace CarPark.Services
                 .FirstOrDefaultAsync(x => x.Id == parkingLotId, cancellationToken);
         }
 
+        public async Task<List<ParkingRateRule>> GetActiveRulesByLotAsync(Guid parkingLotId, CancellationToken cancellationToken = default)
+        {
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            return await db.ParkingRateRules
+                .Where(x => x.ParkingLotId == parkingLotId && x.IsActive)
+                .OrderBy(x => x.Sequence)
+                .ToListAsync(cancellationToken);
+        }
+
         public async Task<List<ParkingRateRule>> GetRulesByLotAsync(Guid parkingLotId, CancellationToken cancellationToken = default)
         {
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -59,6 +69,7 @@ namespace CarPark.Services
 
             db.ParkingRateRules.Add(entity);
             await db.SaveChangesAsync(cancellationToken);
+            currentUserContext.InvalidateCachedRules(rule.ParkingLotId);
             return entity;
         }
 
@@ -84,6 +95,7 @@ namespace CarPark.Services
             existing.UpdateAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync(cancellationToken);
+            currentUserContext.InvalidateCachedRules(existing.ParkingLotId);
         }
 
         public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -101,6 +113,7 @@ namespace CarPark.Services
             existing.UpdateAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync(cancellationToken);
+            currentUserContext.InvalidateCachedRules(existing.ParkingLotId);
         }
 
         private static async Task ValidateAsync(
