@@ -47,6 +47,19 @@ else
                         <input class="form-control" type="time" @bind="_newLotCloseTime" />
                     </div>
                 }
+                <div class="col-md-2">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" id="newHasOvernight" @bind="_newLotHasOvernightPenalty" />
+                        <label class="form-check-label" for="newHasOvernight">ค่าปรับข้ามคืน</label>
+                    </div>
+                </div>
+                @if (_newLotHasOvernightPenalty)
+                {
+                    <div class="col-md-2">
+                        <label class="form-label">จำนวนเงิน</label>
+                        <input class="form-control" type="number" min="0" step="0.01" @bind="_newLotOvernightPenaltyAmount" />
+                    </div>
+                }
                 <div class="col-md-1">
                     <div class="form-check mt-4">
                         <input class="form-check-input" type="checkbox" id="lotActive" @bind="_newLotIsActive" />
@@ -55,6 +68,42 @@ else
                 </div>
                 <div class="col-md-2">
                     <button class="btn btn-primary w-100" @onclick="AddLotAsync">เพิ่ม</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">คัดลอกการตั้งค่าลาน</h5>
+            <p class="text-muted small mb-2">คัดลอกเวลาทำการ ค่าปรับข้ามคืน ตารางเวลา และอัตราค่าบริการทั้งหมดจากลานต้นทางไปยังลานปลายทาง (ข้อมูลเดิมของลานปลายทางจะถูกแทนที่)</p>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">ลานต้นทาง</label>
+                    <select class="form-select" @bind="_copySourceLotId">
+                        <option value="">-- เลือกลานต้นทาง --</option>
+                        @foreach (var lot in _lots)
+                        {
+                            <option value="@lot.Id">@lot.LotCode - @lot.LotName</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">ลานปลายทาง</label>
+                    <select class="form-select" @bind="_copyTargetLotId">
+                        <option value="">-- เลือกลานปลายทาง --</option>
+                        @foreach (var lot in _lots)
+                        {
+                            <option value="@lot.Id">@lot.LotCode - @lot.LotName</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary w-100"
+                            @onclick="CopyLotAsync"
+                            disabled="@(string.IsNullOrWhiteSpace(_copySourceLotId) || string.IsNullOrWhiteSpace(_copyTargetLotId))">
+                        คัดลอก
+                    </button>
                 </div>
             </div>
         </div>
@@ -81,6 +130,7 @@ else
                                 <th>รหัสลาน</th>
                                 <th>ชื่อลาน</th>
                                 <th>เวลาทำการ</th>
+                                <th>ค่าปรับข้ามคืน</th>
                                 <th>ใช้งาน</th>
                                 <th class="text-end">จัดการ</th>
                             </tr>
@@ -108,6 +158,18 @@ else
                                             </div>
                                         </td>
                                         <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="form-check mb-0">
+                                                    <input class="form-check-input" type="checkbox" id="editHasOvernight_@lot.Id" @bind="_editLotHasOvernightPenalty" />
+                                                    <label class="form-check-label" for="editHasOvernight_@lot.Id">มี</label>
+                                                </div>
+                                                @if (_editLotHasOvernightPenalty)
+                                                {
+                                                    <input class="form-control form-control-sm" type="number" min="0" step="0.01" style="width:100px" @bind="_editLotOvernightPenaltyAmount" />
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
                                             <input class="form-check-input" type="checkbox" @bind="_editLotIsActive" />
                                         </td>
                                         <td class="text-end">
@@ -127,6 +189,16 @@ else
                                             else
                                             {
                                                 <span>@lot.OpenTime.ToString(@"hh\:mm") - @lot.CloseTime.ToString(@"hh\:mm")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (lot.HasOvernightPenalty)
+                                            {
+                                                <span class="badge bg-warning text-dark">@lot.OvernightPenaltyAmount.ToString("N0") ฿</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
                                             }
                                         </td>
                                         <td>@(lot.IsActive ? "ใช้งาน" : "ปิดใช้งาน")</td>
@@ -171,6 +243,8 @@ else
     private bool _newLotIsAllDay = true;
     private TimeOnly _newLotOpenTime = new(6, 0);
     private TimeOnly _newLotCloseTime = new(22, 0);
+    private bool _newLotHasOvernightPenalty;
+    private decimal _newLotOvernightPenaltyAmount;
     private bool _newLotIsActive = true;
 
     private Guid? _editingLotId;
@@ -179,7 +253,12 @@ else
     private bool _editLotIsAllDay = true;
     private TimeOnly _editLotOpenTime = new(6, 0);
     private TimeOnly _editLotCloseTime = new(22, 0);
+    private bool _editLotHasOvernightPenalty;
+    private decimal _editLotOvernightPenaltyAmount;
     private bool _editLotIsActive;
+
+    private string _copySourceLotId = string.Empty;
+    private string _copyTargetLotId = string.Empty;
 
     private string _errorMessage = string.Empty;
     private string _successMessage = string.Empty;
@@ -234,6 +313,8 @@ else
                 IsAllDay = _newLotIsAllDay,
                 OpenTime = _newLotOpenTime.ToTimeSpan(),
                 CloseTime = _newLotCloseTime.ToTimeSpan(),
+                HasOvernightPenalty = _newLotHasOvernightPenalty,
+                OvernightPenaltyAmount = _newLotOvernightPenaltyAmount,
                 IsActive = _newLotIsActive
             });
 
@@ -242,6 +323,8 @@ else
             _newLotIsAllDay = true;
             _newLotOpenTime = new(6, 0);
             _newLotCloseTime = new(22, 0);
+            _newLotHasOvernightPenalty = false;
+            _newLotOvernightPenaltyAmount = 0;
             _newLotIsActive = true;
             _successMessage = "เพิ่มลานจอดรถสำเร็จ";
 
@@ -262,6 +345,8 @@ else
         _editLotIsAllDay = lot.IsAllDay;
         _editLotOpenTime = TimeOnly.FromTimeSpan(lot.OpenTime);
         _editLotCloseTime = TimeOnly.FromTimeSpan(lot.CloseTime);
+        _editLotHasOvernightPenalty = lot.HasOvernightPenalty;
+        _editLotOvernightPenaltyAmount = lot.OvernightPenaltyAmount;
         _editLotIsActive = lot.IsActive;
     }
 
@@ -273,6 +358,8 @@ else
         _editLotIsAllDay = true;
         _editLotOpenTime = new(6, 0);
         _editLotCloseTime = new(22, 0);
+        _editLotHasOvernightPenalty = false;
+        _editLotOvernightPenaltyAmount = 0;
         _editLotIsActive = false;
     }
 
@@ -300,11 +387,43 @@ else
                 IsAllDay = _editLotIsAllDay,
                 OpenTime = _editLotOpenTime.ToTimeSpan(),
                 CloseTime = _editLotCloseTime.ToTimeSpan(),
+                HasOvernightPenalty = _editLotHasOvernightPenalty,
+                OvernightPenaltyAmount = _editLotOvernightPenaltyAmount,
                 IsActive = _editLotIsActive
             });
 
             _successMessage = "แก้ไขลานจอดรถสำเร็จ";
             CancelEdit();
+            await LoadLotsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task CopyLotAsync()
+    {
+        ClearMessages();
+
+        if (!Guid.TryParse(_copySourceLotId, out var sourceId) || !Guid.TryParse(_copyTargetLotId, out var targetId))
+        {
+            _errorMessage = "กรุณาเลือกลานต้นทางและลานปลายทาง";
+            return;
+        }
+
+        if (sourceId == targetId)
+        {
+            _errorMessage = "ต้นทางและปลายทางต้องไม่ใช่ลานเดียวกัน";
+            return;
+        }
+
+        try
+        {
+            await ParkingLotService.CopyFromLotAsync(sourceId, targetId);
+            _copySourceLotId = string.Empty;
+            _copyTargetLotId = string.Empty;
+            _successMessage = "คัดลอกการตั้งค่าลานสำเร็จ";
             await LoadLotsAsync();
         }
         catch (Exception ex)

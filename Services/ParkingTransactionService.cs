@@ -89,7 +89,7 @@ namespace CarPark.Services
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<ParkingTransaction?> GetOpenByTicketNoAsync(string ticketNo, CancellationToken cancellationToken = default)
+        public async Task<ParkingTransaction?> GetOpenByTicketNoAsync(string ticketNo, Guid? parkingLotId = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(ticketNo))
             {
@@ -105,7 +105,8 @@ namespace CarPark.Services
                 .Include(x => x.ParkingLot)
                 .FirstOrDefaultAsync(
                     x => x.TicketNo == normalizedTicketNo
-                         && x.OutAt == null,
+                         && x.OutAt == null
+                         && (!parkingLotId.HasValue || x.ParkingLotId == parkingLotId.Value),
                     cancellationToken);
         }
 
@@ -195,22 +196,25 @@ namespace CarPark.Services
         public async Task<ParkingTransaction> CheckOutAsync(
             string ticketNo,
             string plateNo,
+            Guid? parkingLotId = null,
             CancellationToken cancellationToken = default)
         {
             var normalizedPlateNo = NormalizeRequired(plateNo, "Plate number is required.");
-            return await CheckOutCoreAsync(ticketNo, normalizedPlateNo, cancellationToken);
+            return await CheckOutCoreAsync(ticketNo, normalizedPlateNo, parkingLotId, cancellationToken);
         }
 
         public async Task<ParkingTransaction> CheckOutByTicketAsync(
             string ticketNo,
+            Guid? parkingLotId = null,
             CancellationToken cancellationToken = default)
         {
-            return await CheckOutCoreAsync(ticketNo, null, cancellationToken);
+            return await CheckOutCoreAsync(ticketNo, null, parkingLotId, cancellationToken);
         }
 
         private async Task<ParkingTransaction> CheckOutCoreAsync(
             string ticketNo,
             string? expectedPlateNo,
+            Guid? parkingLotId = null,
             CancellationToken cancellationToken = default)
         {
             var normalizedTicketNo = NormalizeRequired(ticketNo, "Ticket number is required.");
@@ -219,9 +223,10 @@ namespace CarPark.Services
             var existing = await db.ParkingTransactions
                 .FirstOrDefaultAsync(
                     x => x.TicketNo == normalizedTicketNo
-                         && x.OutAt == null,
+                         && x.OutAt == null
+                         && (!parkingLotId.HasValue || x.ParkingLotId == parkingLotId.Value),
                     cancellationToken)
-                ?? throw new InvalidOperationException("Open ticket not found.");
+                ?? throw new InvalidOperationException("ไม่พบบัตรที่เปิดอยู่สำหรับลานจอดรถนี้");
 
             if (!string.IsNullOrWhiteSpace(expectedPlateNo)
                 && !string.Equals(existing.PlateNo, expectedPlateNo, StringComparison.OrdinalIgnoreCase))
@@ -333,7 +338,7 @@ namespace CarPark.Services
                     return new ChargeResult(totalMinutes, 0m, inAtUtc.Date != outAtUtc.Date);
             }
 
-            var regularRules = rules.Where(x => !x.ApplyOnOvernight).OrderBy(x => x.Sequence).ToList();
+            var regularRules = rules.OrderBy(x => x.Sequence).ToList();
             var matchedRule = regularRules.FirstOrDefault(
                 x => totalMinutes >= x.StartMinute
                      && (!x.EndMinute.HasValue || totalMinutes <= x.EndMinute.Value));
@@ -356,19 +361,14 @@ namespace CarPark.Services
                 return new ChargeResult(totalMinutes, baseAmount, false);
             }
 
-            var overnightRules = rules
-                .Where(x => x.ApplyOnOvernight || x.CalculationType == ParkingRateCalculationType.OvernightPenalty)
-                .OrderBy(x => x.Sequence)
-                .ToList();
-
-            if (overnightRules.Count == 0)
+            // ค่าปรับข้ามคืนกำหนดที่ระดับ ParkingLot
+            if (lot is not null && lot.HasOvernightPenalty && lot.OvernightPenaltyAmount > 0)
             {
-                return new ChargeResult(totalMinutes, baseAmount, true);
+                var totalAmount = Math.Max(baseAmount, lot.OvernightPenaltyAmount);
+                return new ChargeResult(totalMinutes, totalAmount, true);
             }
 
-            var overnightAmount = overnightRules.Max(x => x.Amount);
-            var totalAmount = Math.Max(baseAmount, overnightAmount);
-            return new ChargeResult(totalMinutes, totalAmount, true);
+            return new ChargeResult(totalMinutes, baseAmount, true);
         }
 
         private static decimal CalculatePerStepAmount(int totalMinutes, ParkingRateRule rule)

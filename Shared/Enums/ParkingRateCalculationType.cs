@@ -4,7 +4,6 @@ namespace CarPark.Shared.Enums
     {
         Free = 0,
         PerHour = 1,
-        FlatAmount = 2,
-        OvernightPenalty = 3
+        FlatAmount = 2
     }
 }

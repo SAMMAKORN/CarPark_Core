@@ -14,6 +14,10 @@ namespace CarPark.Models
 
         public TimeSpan CloseTime { get; set; } = TimeSpan.FromHours(22);
 
+        public bool HasOvernightPenalty { get; set; } = false;
+
+        public decimal OvernightPenaltyAmount { get; set; } = 0;
+
         public bool IsActive { get; set; } = true;
 
         public ICollection<ParkingRateRule> RateRules { get; set; } = new List<ParkingRateRule>();

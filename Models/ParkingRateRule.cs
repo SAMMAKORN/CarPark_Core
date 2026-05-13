@@ -21,8 +21,6 @@ namespace CarPark.Models
 
         public int? BillingStepMinutes { get; set; }
 
-        public bool ApplyOnOvernight { get; set; }
-
         public bool IsActive { get; set; } = true;
 
         /// <summary>null = กฎทั่วไปของลาน, มีค่า = กฎเฉพาะ schedule นั้น</summary>

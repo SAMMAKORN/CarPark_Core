@@ -342,14 +342,22 @@ else
             var transactions = await ParkingTransactionService.GetTodayTransactionsAsync();
             var openTransactions = await ParkingTransactionService.GetOpenTransactionsAsync();
 
+            var currentLotId = CurrentUserContext.CurrentParkingLot?.Id;
+
             _lots.Clear();
             _lots.AddRange(lots);
 
             _transactions.Clear();
-            _transactions.AddRange(transactions);
+            _transactions.AddRange(
+                currentLotId.HasValue
+                    ? transactions.Where(x => x.ParkingLotId == currentLotId.Value)
+                    : transactions);
 
             _openTransactions.Clear();
-            _openTransactions.AddRange(openTransactions);
+            _openTransactions.AddRange(
+                currentLotId.HasValue
+                    ? openTransactions.Where(x => x.ParkingLotId == currentLotId.Value)
+                    : openTransactions);
 
             SyncSelectedTicketContext();
         }
@@ -422,11 +430,12 @@ else
 
         try
         {
-            var openTicket = await ParkingTransactionService.GetOpenByTicketNoAsync(ticketNo);
+            var currentLotId = CurrentUserContext.CurrentParkingLot?.Id;
+            var openTicket = await ParkingTransactionService.GetOpenByTicketNoAsync(ticketNo, currentLotId);
 
             if (openTicket is not null)
             {
-                var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo);
+                var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo, currentLotId);
                 _modalTransaction = result;
                 _isCheckIn = false;
                 _showModal = true;

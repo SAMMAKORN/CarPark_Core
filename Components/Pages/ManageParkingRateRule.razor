@@ -125,12 +125,6 @@ else
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="newOvernight" @bind="_newApplyOnOvernight" />
-                        <label class="form-check-label" for="newOvernight">ค้างคืน</label>
-                    </div>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox" id="newActive" @bind="_newIsActive" />
                         <label class="form-check-label" for="newActive">ใช้งาน</label>
                     </div>
@@ -167,7 +161,6 @@ else
                                 <th>ประเภท</th>
                                 <th>จำนวนเงิน</th>
                                 <th>ขั้น</th>
-                                <th>ค้างคืน</th>
                                 <th>ใช้งาน</th>
                                 <th class="text-end">จัดการ</th>
                             </tr>
@@ -192,7 +185,6 @@ else
                                         </td>
                                         <td><input class="form-control" type="number" min="0" step="0.01" @bind="_editAmount" /></td>
                                         <td><input class="form-control" type="number" min="1" @bind="_editBillingStepMinutesText" /></td>
-                                        <td><input class="form-check-input" type="checkbox" @bind="_editApplyOnOvernight" /></td>
                                         <td><input class="form-check-input" type="checkbox" @bind="_editIsActive" /></td>
                                         <td class="text-end">
                                             <button class="btn btn-sm btn-success me-2" @onclick="SaveEditAsync">บันทึก</button>
@@ -208,7 +200,6 @@ else
                                         <td>@GetCalculationTypeLabel(rule.CalculationType)</td>
                                         <td>@rule.Amount</td>
                                         <td>@(rule.BillingStepMinutes?.ToString() ?? "-")</td>
-                                        <td>@(rule.ApplyOnOvernight ? "ใช่" : "ไม่")</td>
                                         <td>@(rule.IsActive ? "ใช่" : "ไม่")</td>
                                         <td class="text-end">
                                             <button class="btn btn-sm btn-outline-primary me-2" @onclick="@(() => StartEdit(rule))">แก้ไข</button>
@@ -256,7 +247,6 @@ else
     private ParkingRateCalculationType _newCalculationType = ParkingRateCalculationType.Free;
     private decimal _newAmount;
     private string _newBillingStepMinutesText = string.Empty;
-    private bool _newApplyOnOvernight;
     private bool _newIsActive = true;
 
     private Guid? _editingRuleId;
@@ -267,7 +257,6 @@ else
     private ParkingRateCalculationType _editCalculationType = ParkingRateCalculationType.Free;
     private decimal _editAmount;
     private string _editBillingStepMinutesText = string.Empty;
-    private bool _editApplyOnOvernight;
     private bool _editIsActive = true;
 
     private string _errorMessage = string.Empty;
@@ -373,7 +362,6 @@ else
             _newCalculationType,
             _newAmount,
             _newBillingStepMinutesText,
-            _newApplyOnOvernight,
             _newIsActive,
             out var rule))
         {
@@ -407,7 +395,6 @@ else
         _editCalculationType = rule.CalculationType;
         _editAmount = rule.Amount;
         _editBillingStepMinutesText = rule.BillingStepMinutes?.ToString() ?? string.Empty;
-        _editApplyOnOvernight = rule.ApplyOnOvernight;
         _editIsActive = rule.IsActive;
     }
 
@@ -421,7 +408,6 @@ else
         _editCalculationType = ParkingRateCalculationType.Free;
         _editAmount = 0;
         _editBillingStepMinutesText = string.Empty;
-        _editApplyOnOvernight = false;
         _editIsActive = true;
     }
 
@@ -442,7 +428,6 @@ else
             _editCalculationType,
             _editAmount,
             _editBillingStepMinutesText,
-            _editApplyOnOvernight,
             _editIsActive,
             out var rule))
         {
@@ -490,7 +475,6 @@ else
         ParkingRateCalculationType calculationType,
         decimal amount,
         string billingStepMinutesText,
-        bool applyOnOvernight,
         bool isActive,
         out ParkingRateRule rule)
     {
@@ -553,7 +537,6 @@ else
             CalculationType = calculationType,
             Amount = amount,
             BillingStepMinutes = billingStepMinutes,
-            ApplyOnOvernight = applyOnOvernight,
             IsActive = isActive
         };
 
@@ -587,7 +570,6 @@ else
         _newCalculationType = ParkingRateCalculationType.Free;
         _newAmount = 0;
         _newBillingStepMinutesText = string.Empty;
-        _newApplyOnOvernight = false;
         _newIsActive = true;
     }
 
@@ -600,7 +582,6 @@ else
         ParkingRateCalculationType.Free => "ฟรี",
         ParkingRateCalculationType.PerHour => "รายชั่วโมง",
         ParkingRateCalculationType.FlatAmount => "อัตราคงที่",
-        ParkingRateCalculationType.OvernightPenalty => "ค่าปรับค้างคืน",
         _ => type.ToString()
     };
 

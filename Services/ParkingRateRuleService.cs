@@ -64,7 +64,6 @@ namespace CarPark.Services
                 CalculationType = rule.CalculationType,
                 Amount = rule.Amount,
                 BillingStepMinutes = rule.BillingStepMinutes,
-                ApplyOnOvernight = rule.ApplyOnOvernight,
                 IsActive = rule.IsActive,
                 CreateBy = currentUserContext.CurrentUserId,
                 CreateAt = DateTime.UtcNow
@@ -92,7 +91,6 @@ namespace CarPark.Services
             existing.CalculationType = rule.CalculationType;
             existing.Amount = rule.Amount;
             existing.BillingStepMinutes = rule.BillingStepMinutes;
-            existing.ApplyOnOvernight = rule.ApplyOnOvernight;
             existing.IsActive = rule.IsActive;
             existing.UpdateBy = currentUserContext.CurrentUserId;
             existing.UpdateAt = DateTime.UtcNow;
@@ -141,7 +139,6 @@ namespace CarPark.Services
                     CalculationType = src.CalculationType,
                     Amount = src.Amount,
                     BillingStepMinutes = src.BillingStepMinutes,
-                    ApplyOnOvernight = src.ApplyOnOvernight,
                     IsActive = src.IsActive,
                     CreateBy = currentUserContext.CurrentUserId,
                     CreateAt = now
