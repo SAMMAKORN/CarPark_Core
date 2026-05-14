@@ -427,16 +427,18 @@ namespace CarPark.Services
                 };
             }
 
-            var isOvernight = inAtUtc.Date != outAtUtc.Date;
+            var nightCount = (outAtUtc.Date - inAtUtc.Date).Days;
+            var isOvernight = nightCount > 0;
             if (!isOvernight)
             {
                 return new ChargeResult(totalMinutes, baseAmount, false);
             }
 
-            // ค่าปรับข้ามคืนกำหนดที่ระดับ ParkingLot
+            // ค่าปรับข้ามคืนกำหนดที่ระดับ ParkingLot คูณตามจำนวนคืน
             if (lot is not null && lot.HasOvernightPenalty && lot.OvernightPenaltyAmount > 0)
             {
-                var totalAmount = Math.Max(baseAmount, lot.OvernightPenaltyAmount);
+                var totalPenalty = lot.OvernightPenaltyAmount * nightCount;
+                var totalAmount = Math.Max(baseAmount, totalPenalty);
                 return new ChargeResult(totalMinutes, totalAmount, true);
             }
 
