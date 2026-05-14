@@ -11,6 +11,7 @@ SolidCompression=yes
 SetupIconFile=bin\Release\net10.0-windows10.0.19041.0\win-x64\appicon.ico
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=lowest
 
 [Files]
 Source: "bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion skipifsourcedoesntexist

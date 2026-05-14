@@ -1,5 +1,14 @@
 @inherits LayoutComponentBase
 @inject CurrentUserContext CurrentUserContext
+@inject DatabaseHealthService DatabaseHealthService
+@implements IDisposable
+
+@if (!DatabaseHealthService.IsConnected)
+{
+    <div class="db-offline-banner">
+        <span>⚠️ ไม่สามารถเชื่อมต่อฐานข้อมูลได้ — ระบบอาจทำงานไม่ถูกต้อง กรุณาตรวจสอบการเชื่อมต่อ</span>
+    </div>
+}
 
 <div class="page @(CurrentUserContext.IsAuthenticated ? "layout-auth" : "layout-guest")">
     @if (CurrentUserContext.IsAuthenticated)
@@ -22,3 +31,20 @@
         </article>
     </main>
 </div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        DatabaseHealthService.OnStatusChanged += OnDbStatusChanged;
+    }
+
+    private void OnDbStatusChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        DatabaseHealthService.OnStatusChanged -= OnDbStatusChanged;
+    }
+}

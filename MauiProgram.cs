@@ -38,6 +38,7 @@ namespace CarPark
             });
 
             builder.Services.AddSingleton<CurrentUserContext>();
+            builder.Services.AddSingleton<DatabaseHealthService>();
             builder.Services.AddScoped<UserAuthService>();
             builder.Services.AddScoped<UserService>();
             builder.Services.AddScoped<ParkingLotService>();
