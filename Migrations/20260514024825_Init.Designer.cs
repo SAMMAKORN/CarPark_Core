@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CarPark.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260513093421_AddParkingGate")]
-    partial class AddParkingGate
+    [Migration("20260514024825_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -97,6 +97,9 @@ namespace CarPark.Migrations
                     b.Property<Guid?>("DeletedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("HasOvernightPenalty")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -117,6 +120,9 @@ namespace CarPark.Migrations
                     b.Property<TimeSpan>("OpenTime")
                         .HasColumnType("time");
 
+                    b.Property<decimal>("OvernightPenaltyAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("UpdateAt")
                         .HasColumnType("datetime2");
 
@@ -134,6 +140,69 @@ namespace CarPark.Migrations
                     b.ToTable("ParkingLots");
                 });
 
+            modelBuilder.Entity("CarPark.Models.ParkingLotSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeSpan>("CloseTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("CreateAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreateBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("DaysOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeleteAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsAllDay")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeSpan>("OpenTime")
+                        .HasColumnType("time");
+
+                    b.Property<Guid>("ParkingLotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ScheduleName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdateAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdateBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreateBy");
+
+                    b.HasIndex("DeletedBy");
+
+                    b.HasIndex("ParkingLotId");
+
+                    b.HasIndex("UpdateBy");
+
+                    b.ToTable("ParkingLotSchedules", (string)null);
+                });
+
             modelBuilder.Entity("CarPark.Models.ParkingRateRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -142,9 +211,6 @@ namespace CarPark.Migrations
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<bool>("ApplyOnOvernight")
-                        .HasColumnType("bit");
 
                     b.Property<int?>("BillingStepMinutes")
                         .HasColumnType("int");
@@ -176,6 +242,9 @@ namespace CarPark.Migrations
                     b.Property<Guid>("ParkingLotId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ParkingScheduleId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("RuleName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -199,6 +268,8 @@ namespace CarPark.Migrations
                     b.HasIndex("DeletedBy");
 
                     b.HasIndex("ParkingLotId");
+
+                    b.HasIndex("ParkingScheduleId");
 
                     b.HasIndex("UpdateBy");
 
@@ -226,6 +297,9 @@ namespace CarPark.Migrations
                     b.Property<DateTime>("InAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("InGateId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -235,7 +309,7 @@ namespace CarPark.Migrations
                     b.Property<DateTime?>("OutAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("ParkingGateId")
+                    b.Property<Guid?>("OutGateId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("ParkingLotId")
@@ -270,7 +344,9 @@ namespace CarPark.Migrations
 
                     b.HasIndex("DeletedBy");
 
-                    b.HasIndex("ParkingGateId");
+                    b.HasIndex("InGateId");
+
+                    b.HasIndex("OutGateId");
 
                     b.HasIndex("ParkingLotId");
 
@@ -305,13 +381,11 @@ namespace CarPark.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Password")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Role")
                         .HasColumnType("int");
@@ -324,8 +398,7 @@ namespace CarPark.Migrations
 
                     b.Property<string>("Username")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -334,9 +407,6 @@ namespace CarPark.Migrations
                     b.HasIndex("DeletedBy");
 
                     b.HasIndex("UpdateBy");
-
-                    b.HasIndex("Username")
-                        .IsUnique();
 
                     b.ToTable("Users", (string)null);
 
@@ -351,28 +421,6 @@ namespace CarPark.Migrations
                             Password = "PBKDF2$SHA256$100000$CNMtqGjCwsaY4gv7R9CXhw==$lGxIuuvrpQU4rT2dzxg8Y7sbv2kmTK8mG2kMgrOUMc4=",
                             Role = 0,
                             Username = "admin"
-                        },
-                        new
-                        {
-                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                            CreateAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IsDeleted = false,
-                            MustChangePassword = true,
-                            Name = "Normal User",
-                            Password = "PBKDF2$SHA256$100000$W6wNPlF5a8q79g6h3inyRQ==$0N6YuOugjBTtdFCNrIBjdkXyi9B7xVfx6a75yU147r4=",
-                            Role = 1,
-                            Username = "user"
-                        },
-                        new
-                        {
-                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
-                            CreateAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IsDeleted = false,
-                            MustChangePassword = true,
-                            Name = "Parking Operator",
-                            Password = "PBKDF2$SHA256$100000$ITDALgYVh6dezGnLr7jgFg==$Gu2S3x9mUOixGYSLAxZQqQUc1dU2xzIY2mUGT/aiYks=",
-                            Role = 1,
-                            Username = "operator"
                         });
                 });
 
@@ -426,6 +474,35 @@ namespace CarPark.Migrations
                     b.Navigation("UpdateByUser");
                 });
 
+            modelBuilder.Entity("CarPark.Models.ParkingLotSchedule", b =>
+                {
+                    b.HasOne("CarPark.Models.User", "CreateByUser")
+                        .WithMany()
+                        .HasForeignKey("CreateBy");
+
+                    b.HasOne("CarPark.Models.User", "DeletedByUser")
+                        .WithMany()
+                        .HasForeignKey("DeletedBy");
+
+                    b.HasOne("CarPark.Models.ParkingLot", "ParkingLot")
+                        .WithMany("Schedules")
+                        .HasForeignKey("ParkingLotId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("CarPark.Models.User", "UpdateByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdateBy");
+
+                    b.Navigation("CreateByUser");
+
+                    b.Navigation("DeletedByUser");
+
+                    b.Navigation("ParkingLot");
+
+                    b.Navigation("UpdateByUser");
+                });
+
             modelBuilder.Entity("CarPark.Models.ParkingRateRule", b =>
                 {
                     b.HasOne("CarPark.Models.User", "CreateByUser")
@@ -442,6 +519,11 @@ namespace CarPark.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("CarPark.Models.ParkingLotSchedule", "ParkingSchedule")
+                        .WithMany("RateRules")
+                        .HasForeignKey("ParkingScheduleId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("CarPark.Models.User", "UpdateByUser")
                         .WithMany()
                         .HasForeignKey("UpdateBy");
@@ -451,6 +533,8 @@ namespace CarPark.Migrations
                     b.Navigation("DeletedByUser");
 
                     b.Navigation("ParkingLot");
+
+                    b.Navigation("ParkingSchedule");
 
                     b.Navigation("UpdateByUser");
                 });
@@ -465,9 +549,14 @@ namespace CarPark.Migrations
                         .WithMany()
                         .HasForeignKey("DeletedBy");
 
-                    b.HasOne("CarPark.Models.ParkingGate", "ParkingGate")
-                        .WithMany("Transactions")
-                        .HasForeignKey("ParkingGateId")
+                    b.HasOne("CarPark.Models.ParkingGate", "InGate")
+                        .WithMany()
+                        .HasForeignKey("InGateId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("CarPark.Models.ParkingGate", "OutGate")
+                        .WithMany()
+                        .HasForeignKey("OutGateId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("CarPark.Models.ParkingLot", "ParkingLot")
@@ -484,7 +573,9 @@ namespace CarPark.Migrations
 
                     b.Navigation("DeletedByUser");
 
-                    b.Navigation("ParkingGate");
+                    b.Navigation("InGate");
+
+                    b.Navigation("OutGate");
 
                     b.Navigation("ParkingLot");
 
@@ -512,15 +603,17 @@ namespace CarPark.Migrations
                     b.Navigation("UpdateByUser");
                 });
 
-            modelBuilder.Entity("CarPark.Models.ParkingGate", b =>
-                {
-                    b.Navigation("Transactions");
-                });
-
             modelBuilder.Entity("CarPark.Models.ParkingLot", b =>
                 {
                     b.Navigation("Gates");
 
+                    b.Navigation("RateRules");
+
+                    b.Navigation("Schedules");
+                });
+
+            modelBuilder.Entity("CarPark.Models.ParkingLotSchedule", b =>
+                {
                     b.Navigation("RateRules");
                 });
 #pragma warning restore 612, 618

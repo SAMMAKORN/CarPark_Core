@@ -35,32 +35,35 @@ else
                         <input class="form-control" id="password" type="password" @bind="_password" />
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label" for="parkinglot">ลานจอดรถ</label>
-                        <select class="form-select" id="parkinglot"
-                                @bind="_selectedParkingLotId"
-                                @bind:after="OnLotChangedAsync">
-                            <option value="">-- เลือกลานจอดรถ --</option>
-                            @foreach (var lot in _parkingLots)
-                            {
-                                var hours = lot.IsAllDay ? "ตลอดเวลา" : $"{lot.OpenTime.ToString(@"hh\:mm")}-{lot.CloseTime.ToString(@"hh\:mm")}";
-                                <option value="@lot.Id">@lot.LotCode — @lot.LotName (@hours)</option>
-                            }
-                        </select>
-                    </div>
-
-                    @if (_gates.Count > 0)
+                    @if (_parkingLots.Count > 0)
                     {
                         <div class="mb-3">
-                            <label class="form-label" for="gate">ประตู</label>
-                            <select class="form-select" id="gate" @bind="_selectedGateId">
-                                <option value="">-- เลือกประตู --</option>
-                                @foreach (var gate in _gates)
+                            <label class="form-label" for="parkinglot">ลานจอดรถ</label>
+                            <select class="form-select" id="parkinglot"
+                                    @bind="_selectedParkingLotId"
+                                    @bind:after="OnLotChangedAsync">
+                                <option value="">-- เลือกลานจอดรถ --</option>
+                                @foreach (var lot in _parkingLots)
                                 {
-                                    <option value="@gate.Id">@gate.GateName</option>
+                                    var hours = lot.IsAllDay ? "ตลอดเวลา" : $"{lot.OpenTime.ToString(@"hh\:mm")}-{lot.CloseTime.ToString(@"hh\:mm")}";
+                                    <option value="@lot.Id">@lot.LotCode — @lot.LotName (@hours)</option>
                                 }
                             </select>
                         </div>
+
+                        @if (_gates.Count > 0)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label" for="gate">ประตู</label>
+                                <select class="form-select" id="gate" @bind="_selectedGateId">
+                                    <option value="">-- เลือกประตู --</option>
+                                    @foreach (var gate in _gates)
+                                    {
+                                        <option value="@gate.Id">@gate.GateName</option>
+                                    }
+                                </select>
+                            </div>
+                        }
                     }
 
                     <button class="btn btn-primary w-100" @onclick="LoginAsync">เข้าสู่ระบบ</button>
@@ -113,16 +116,19 @@ else
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_selectedParkingLotId))
+        if (_parkingLots.Count > 0)
         {
-            _errorMessage = "กรุณาเลือกลานจอดรถ";
-            return;
-        }
+            if (string.IsNullOrWhiteSpace(_selectedParkingLotId))
+            {
+                _errorMessage = "กรุณาเลือกลานจอดรถ";
+                return;
+            }
 
-        if (_gates.Count > 0 && string.IsNullOrWhiteSpace(_selectedGateId))
-        {
-            _errorMessage = "กรุณาเลือกประตู";
-            return;
+            if (_gates.Count > 0 && string.IsNullOrWhiteSpace(_selectedGateId))
+            {
+                _errorMessage = "กรุณาเลือกประตู";
+                return;
+            }
         }
 
         var user = await UserAuthService.LoginAsync(_username, _password);
@@ -132,20 +138,23 @@ else
             return;
         }
 
-        var selectedLot = _parkingLots.FirstOrDefault(x => x.Id.ToString() == _selectedParkingLotId);
-        if (selectedLot is null)
+        if (_parkingLots.Count > 0)
         {
-            _errorMessage = "ลานจอดรถที่เลือกไม่พร้อมใช้งาน";
-            return;
+            var selectedLot = _parkingLots.FirstOrDefault(x => x.Id.ToString() == _selectedParkingLotId);
+            if (selectedLot is null)
+            {
+                _errorMessage = "ลานจอดรถที่เลือกไม่พร้อมใช้งาน";
+                return;
+            }
+
+            CurrentUserContext.SelectParkingLot(selectedLot);
+
+            var selectedGate = _gates.FirstOrDefault(x => x.Id.ToString() == _selectedGateId);
+            CurrentUserContext.SelectGate(selectedGate);
+
+            var rules = await ParkingRateRuleService.GetActiveRulesByLotAsync(selectedLot.Id);
+            CurrentUserContext.SetCachedRules(selectedLot.Id, rules);
         }
-
-        CurrentUserContext.SelectParkingLot(selectedLot);
-
-        var selectedGate = _gates.FirstOrDefault(x => x.Id.ToString() == _selectedGateId);
-        CurrentUserContext.SelectGate(selectedGate);
-
-        var rules = await ParkingRateRuleService.GetActiveRulesByLotAsync(selectedLot.Id);
-        CurrentUserContext.SetCachedRules(selectedLot.Id, rules);
 
         NavigationManager.NavigateTo("/");
     }

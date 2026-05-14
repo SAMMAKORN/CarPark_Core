@@ -94,6 +94,9 @@ namespace CarPark.Migrations
                     b.Property<Guid?>("DeletedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("HasOvernightPenalty")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -113,6 +116,9 @@ namespace CarPark.Migrations
 
                     b.Property<TimeSpan>("OpenTime")
                         .HasColumnType("time");
+
+                    b.Property<decimal>("OvernightPenaltyAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("UpdateAt")
                         .HasColumnType("datetime2");
@@ -202,9 +208,6 @@ namespace CarPark.Migrations
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<bool>("ApplyOnOvernight")
-                        .HasColumnType("bit");
 
                     b.Property<int?>("BillingStepMinutes")
                         .HasColumnType("int");
