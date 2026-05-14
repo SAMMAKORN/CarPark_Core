@@ -117,6 +117,7 @@ namespace CarPark.Services
             DateTime inAtLocal,
             DateTime? outAtLocal,
             decimal? totalAmount,
+            string? remark = null,
             CancellationToken cancellationToken = default)
         {
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -141,6 +142,7 @@ namespace CarPark.Services
             existing.OutAt = outAtUtc;
             existing.TotalMinutes = totalMinutes;
             existing.TotalAmount = totalAmount;
+            existing.Remark = string.IsNullOrWhiteSpace(remark) ? null : remark.Trim();
             existing.Status = outAtUtc.HasValue ? TransactionType.OUT : TransactionType.IN;
             existing.IsOvernight = outAtUtc.HasValue && inAtUtc.Date != outAtUtc.Value.Date;
             existing.UpdateBy = currentUserContext.CurrentUserId;
@@ -193,28 +195,92 @@ namespace CarPark.Services
             return entity;
         }
 
+        public async Task<CheckOutPreview> GetCheckOutPreviewAsync(
+            string ticketNo,
+            Guid? parkingLotId = null,
+            CancellationToken cancellationToken = default)
+        {
+            var normalizedTicketNo = NormalizeRequired(ticketNo, "Ticket number is required.");
+
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            var existing = await db.ParkingTransactions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.TicketNo == normalizedTicketNo
+                         && x.OutAt == null
+                         && (!parkingLotId.HasValue || x.ParkingLotId == parkingLotId.Value),
+                    cancellationToken)
+                ?? throw new InvalidOperationException("ไม่พบบัตรที่เปิดอยู่สำหรับลานจอดรถนี้");
+
+            var now = DateTime.UtcNow;
+            var totalMinutes = (int)Math.Ceiling((now - existing.InAt).TotalMinutes);
+            if (totalMinutes < 0) totalMinutes = 0;
+
+            var lot = await db.ParkingLots
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == existing.ParkingLotId, cancellationToken);
+
+            var schedules = await db.ParkingLotSchedules
+                .AsNoTracking()
+                .Where(x => x.ParkingLotId == existing.ParkingLotId && x.IsActive)
+                .ToListAsync(cancellationToken);
+
+            var inAtLocal = existing.InAt.ToLocalTime();
+            var inDayBit = ParkingLotScheduleService.DayOfWeekToBit(inAtLocal.DayOfWeek);
+            var matchedSchedule = schedules.FirstOrDefault(s => (s.DaysOfWeek & inDayBit) != 0);
+
+            var activeRules = await db.ParkingRateRules
+                .AsNoTracking()
+                .Include(x => x.Conditions)
+                .Where(x => x.ParkingLotId == existing.ParkingLotId && x.IsActive)
+                .OrderBy(x => x.Sequence)
+                .ToListAsync(cancellationToken);
+
+            var scopedRules = matchedSchedule is not null
+                ? activeRules.Where(r => r.ParkingScheduleId == matchedSchedule.Id).ToList()
+                : activeRules.Where(r => r.ParkingScheduleId == null).ToList();
+
+            var applicableConditions = scopedRules
+                .Where(r => r.CalculationType == ParkingRateCalculationType.ConditionalFree
+                         && totalMinutes >= r.StartMinute
+                         && (!r.EndMinute.HasValue || totalMinutes <= r.EndMinute.Value))
+                .SelectMany(r => r.Conditions)
+                .ToList();
+
+            var chargeResult = CalculateCharge(activeRules, existing.InAt, now, conditionMet: false, lot, matchedSchedule);
+
+            return new CheckOutPreview(existing, applicableConditions, chargeResult.TotalAmount);
+        }
+
         public async Task<ParkingTransaction> CheckOutAsync(
             string ticketNo,
             string plateNo,
             Guid? parkingLotId = null,
+            bool conditionMet = false,
+            string? conditionName = null,
             CancellationToken cancellationToken = default)
         {
             var normalizedPlateNo = NormalizeRequired(plateNo, "Plate number is required.");
-            return await CheckOutCoreAsync(ticketNo, normalizedPlateNo, parkingLotId, cancellationToken);
+            return await CheckOutCoreAsync(ticketNo, normalizedPlateNo, parkingLotId, conditionMet, conditionName, cancellationToken);
         }
 
         public async Task<ParkingTransaction> CheckOutByTicketAsync(
             string ticketNo,
             Guid? parkingLotId = null,
+            bool conditionMet = false,
+            string? conditionName = null,
             CancellationToken cancellationToken = default)
         {
-            return await CheckOutCoreAsync(ticketNo, null, parkingLotId, cancellationToken);
+            return await CheckOutCoreAsync(ticketNo, null, parkingLotId, conditionMet, conditionName, cancellationToken);
         }
 
         private async Task<ParkingTransaction> CheckOutCoreAsync(
             string ticketNo,
             string? expectedPlateNo,
             Guid? parkingLotId = null,
+            bool conditionMet = false,
+            string? conditionName = null,
             CancellationToken cancellationToken = default)
         {
             var normalizedTicketNo = NormalizeRequired(ticketNo, "Ticket number is required.");
@@ -261,13 +327,16 @@ namespace CarPark.Services
                     .OrderBy(x => x.Sequence)
                     .ToListAsync(cancellationToken);
 
-            var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt, lot, matchedSchedule);
+            var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt, conditionMet, lot, matchedSchedule);
 
             existing.OutAt = outAt;
             existing.OutGateId = currentUserContext.CurrentGate?.Id;
             existing.TotalMinutes = chargeResult.TotalMinutes;
             existing.TotalAmount = chargeResult.TotalAmount;
             existing.IsOvernight = chargeResult.IsOvernight;
+            existing.Remark = conditionMet && !string.IsNullOrWhiteSpace(conditionName)
+                ? conditionName.Trim()
+                : null;
             existing.Status = TransactionType.OUT;
             existing.UpdateBy = currentUserContext.CurrentUserId;
             existing.UpdateAt = DateTime.UtcNow;
@@ -296,6 +365,7 @@ namespace CarPark.Services
             List<ParkingRateRule> allRules,
             DateTime inAtUtc,
             DateTime outAtUtc,
+            bool conditionMet = false,
             ParkingLot? lot = null,
             ParkingLotSchedule? matchedSchedule = null)
         {
@@ -341,7 +411,8 @@ namespace CarPark.Services
             var regularRules = rules.OrderBy(x => x.Sequence).ToList();
             var matchedRule = regularRules.FirstOrDefault(
                 x => totalMinutes >= x.StartMinute
-                     && (!x.EndMinute.HasValue || totalMinutes <= x.EndMinute.Value));
+                     && (!x.EndMinute.HasValue || totalMinutes <= x.EndMinute.Value)
+                     && (x.CalculationType != ParkingRateCalculationType.ConditionalFree || conditionMet));
 
             decimal baseAmount = 0m;
             if (matchedRule is not null)
@@ -349,6 +420,7 @@ namespace CarPark.Services
                 baseAmount = matchedRule.CalculationType switch
                 {
                     ParkingRateCalculationType.Free => 0m,
+                    ParkingRateCalculationType.ConditionalFree => 0m,
                     ParkingRateCalculationType.FlatAmount => matchedRule.Amount,
                     ParkingRateCalculationType.PerHour => CalculatePerStepAmount(totalMinutes, matchedRule),
                     _ => 0m

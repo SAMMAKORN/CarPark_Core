@@ -27,6 +27,8 @@ namespace CarPark.Models
 
         public Guid? OutGateId { get; set; }
 
+        public string? Remark { get; set; }
+
         public ParkingLot? ParkingLot { get; set; }
 
         public ParkingGate? InGate { get; set; }

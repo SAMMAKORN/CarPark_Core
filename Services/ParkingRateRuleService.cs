@@ -31,6 +31,7 @@ namespace CarPark.Services
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
             return await db.ParkingRateRules
+                .Include(x => x.Conditions)
                 .Where(x => x.ParkingLotId == parkingLotId && x.IsActive)
                 .OrderBy(x => x.Sequence)
                 .ToListAsync(cancellationToken);
@@ -42,9 +43,77 @@ namespace CarPark.Services
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
             return await db.ParkingRateRules
+                .Include(x => x.Conditions)
                 .Where(x => x.ParkingLotId == parkingLotId && x.ParkingScheduleId == scheduleId)
                 .OrderBy(x => x.Sequence)
                 .ToListAsync(cancellationToken);
+        }
+
+        public async Task<ParkingRateCondition> AddConditionAsync(Guid ruleId, string conditionName, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(conditionName))
+                throw new InvalidOperationException("กรุณากรอกชื่อเงื่อนไข");
+
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            var rule = await db.ParkingRateRules.FirstOrDefaultAsync(x => x.Id == ruleId, cancellationToken)
+                ?? throw new InvalidOperationException("ไม่พบกฎอัตราค่าบริการ");
+
+            var entity = new ParkingRateCondition
+            {
+                ParkingRateRuleId = ruleId,
+                ConditionName = conditionName.Trim(),
+                CreateBy = currentUserContext.CurrentUserId,
+                CreateAt = DateTime.UtcNow
+            };
+
+            db.ParkingRateConditions.Add(entity);
+            await db.SaveChangesAsync(cancellationToken);
+            currentUserContext.InvalidateCachedRules(rule.ParkingLotId);
+            return entity;
+        }
+
+        public async Task UpdateConditionAsync(Guid conditionId, string conditionName, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(conditionName))
+                throw new InvalidOperationException("กรุณากรอกชื่อเงื่อนไข");
+
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            var existing = await db.ParkingRateConditions
+                .Include(x => x.Rule)
+                .FirstOrDefaultAsync(x => x.Id == conditionId, cancellationToken)
+                ?? throw new InvalidOperationException("ไม่พบเงื่อนไข");
+
+            existing.ConditionName = conditionName.Trim();
+            existing.UpdateBy = currentUserContext.CurrentUserId;
+            existing.UpdateAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            if (existing.Rule is not null)
+                currentUserContext.InvalidateCachedRules(existing.Rule.ParkingLotId);
+        }
+
+        public async Task DeleteConditionAsync(Guid conditionId, CancellationToken cancellationToken = default)
+        {
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            var existing = await db.ParkingRateConditions
+                .Include(x => x.Rule)
+                .FirstOrDefaultAsync(x => x.Id == conditionId, cancellationToken)
+                ?? throw new InvalidOperationException("ไม่พบเงื่อนไข");
+
+            existing.IsDeleted = true;
+            existing.DeletedBy = currentUserContext.CurrentUserId;
+            existing.DeleteAt = DateTime.UtcNow;
+            existing.UpdateBy = currentUserContext.CurrentUserId;
+            existing.UpdateAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            if (existing.Rule is not null)
+                currentUserContext.InvalidateCachedRules(existing.Rule.ParkingLotId);
         }
 
         public async Task<ParkingRateRule> CreateAsync(ParkingRateRule rule, CancellationToken cancellationToken = default)

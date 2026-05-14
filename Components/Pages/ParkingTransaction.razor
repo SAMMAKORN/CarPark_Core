@@ -2,6 +2,7 @@
 @inject CurrentUserContext CurrentUserContext
 @inject ParkingTransactionService ParkingTransactionService
 @using ParkingTransactionModel = CarPark.Models.ParkingTransaction
+@using CarPark.Models
 @implements IDisposable
 
 <PageTitle>รายการจอดรถ</PageTitle>
@@ -164,12 +165,52 @@ else
                                         <td class="fw-bold fs-5">ยอดที่คำนวณได้</td>
                                         <td class="fw-bold fs-2">@((_modalTransaction.TotalAmount ?? 0m).ToString("0.00")) บาท</td>
                                     </tr>
+                                    @if (!string.IsNullOrWhiteSpace(_modalTransaction.Remark))
+                                    {
+                                        <tr class="table-success">
+                                            <td class="fw-semibold">หมายเหตุ</td>
+                                            <td>@_modalTransaction.Remark</td>
+                                        </tr>
+                                    }
                                 }
                             </tbody>
                         </table>
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-danger" @ref="_closeModalBtnRef" @onclick="CloseModal">ปิด</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_showValidationModal && _pendingCheckOut is not null)
+    {
+        <div class="modal-backdrop fade show"></div>
+        <div class="modal fade show d-block" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning">
+                        <h5 class="modal-title">ตรวจสอบเงื่อนไขจอดฟรี</h5>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-1">บัตร <strong>@_pendingCheckOut.Transaction.TicketNo</strong>
+                            — กรุณาตรวจสอบใบเสร็จแล้วเลือกเงื่อนไขที่ผ่าน</p>
+                        <p class="text-muted small mb-3">(ต้องมีตราประทับจากร้านค้า)</p>
+                        <div class="d-grid gap-2">
+                            @foreach (var cond in _pendingCheckOut.ApplicableConditions)
+                            {
+                                <button class="btn btn-success btn-lg"
+                                        @onclick="@(() => ConfirmValidationAsync(true, cond.ConditionName))">
+                                    ✓ @cond.ConditionName
+                                </button>
+                            }
+                            <hr class="my-1" />
+                            <button class="btn btn-outline-secondary"
+                                    @onclick="@(() => ConfirmValidationAsync(false, null))">
+                                ไม่ผ่านเงื่อนไข — คิดราคาปกติ (@_pendingCheckOut.NormalCharge.ToString("0.00") บาท)
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -216,6 +257,7 @@ else
                                 <th>เวลาออก</th>
                                 <th>นาที</th>
                                 <th>ยอด (บาท)</th>
+                                <th>หมายเหตุ</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -235,6 +277,7 @@ else
                                         <td><input class="form-control form-control-sm" type="datetime-local" @bind="_editOutAt" /></td>
                                         <td class="text-muted">-</td>
                                         <td><input class="form-control form-control-sm" type="number" step="0.01" min="0" @bind="_editTotalAmount" placeholder="-" /></td>
+                                        <td><input class="form-control form-control-sm" @bind="_editRemark" placeholder="-" /></td>
                                         <td class="text-end" style="white-space: nowrap">
                                             <button class="btn btn-sm btn-success me-1" @onclick="SaveTxEditAsync">บันทึก</button>
                                             <button class="btn btn-sm btn-secondary" @onclick="CancelTxEdit">ยกเลิก</button>
@@ -254,6 +297,7 @@ else
                                         <td>@ToLocalDateTimeText(tx.OutAt)</td>
                                         <td>@GetDisplayMinutes(tx)</td>
                                         <td>@(tx.TotalAmount?.ToString("0.00") ?? "-")</td>
+                                        <td>@(tx.Remark ?? "-")</td>
                                         <td class="text-end">
                                             <button class="btn btn-sm btn-outline-primary" @onclick="() => StartTxEdit(tx)">แก้ไข</button>
                                         </td>
@@ -299,10 +343,14 @@ else
     private DateTime _editInAt;
     private DateTime? _editOutAt;
     private decimal? _editTotalAmount;
+    private string _editRemark = string.Empty;
 
     private bool _showModal;
     private bool _isCheckIn;
     private ParkingTransactionModel? _modalTransaction;
+
+    private CheckOutPreview? _pendingCheckOut;
+    private bool _showValidationModal;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -435,11 +483,22 @@ else
 
             if (openTicket is not null)
             {
-                var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo, currentLotId);
-                _modalTransaction = result;
-                _isCheckIn = false;
-                _showModal = true;
-                _pendingFocusCloseBtn = true;
+                var preview = await ParkingTransactionService.GetCheckOutPreviewAsync(ticketNo, currentLotId);
+
+                if (preview.ApplicableConditions.Count > 0)
+                {
+                    _pendingCheckOut = preview;
+                    _showValidationModal = true;
+                    _ticketNoInput = string.Empty;
+                    _plateNoInput = string.Empty;
+                    _parkingLotIdText = CurrentUserContext.CurrentParkingLot?.Id.ToString() ?? string.Empty;
+                    _selectedOpenTransaction = null;
+                    await LoadDataAsync();
+                    return;
+                }
+
+                var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo, currentLotId, conditionMet: false);
+                ShowCheckOutModal(result);
             }
             else
             {
@@ -572,6 +631,7 @@ else
         _editInAt = tx.InAt.ToLocalTime();
         _editOutAt = tx.OutAt?.ToLocalTime();
         _editTotalAmount = tx.TotalAmount;
+        _editRemark = tx.Remark ?? string.Empty;
     }
 
     private void CancelTxEdit()
@@ -592,7 +652,8 @@ else
                 _editPlateNo,
                 _editInAt,
                 _editOutAt,
-                _editTotalAmount);
+                _editTotalAmount,
+                _editRemark);
 
             _editingTxId = null;
             _successMessage = "แก้ไขรายการสำเร็จ";
@@ -601,6 +662,44 @@ else
         catch (Exception ex)
         {
             _errorMessage = ex.Message;
+        }
+    }
+
+    private void ShowCheckOutModal(ParkingTransactionModel result)
+    {
+        _modalTransaction = result;
+        _isCheckIn = false;
+        _showModal = true;
+        _pendingFocusCloseBtn = true;
+    }
+
+    private async Task ConfirmValidationAsync(bool conditionMet, string? conditionName)
+    {
+        if (_pendingCheckOut is null) return;
+
+        var ticketNo = _pendingCheckOut.Transaction.TicketNo;
+        var lotId = _pendingCheckOut.Transaction.ParkingLotId;
+        _pendingCheckOut = null;
+        _showValidationModal = false;
+
+        ClearMessages();
+
+        try
+        {
+            var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo, lotId, conditionMet: conditionMet, conditionName: conditionName);
+            ShowCheckOutModal(result);
+
+            _ticketNoInput = string.Empty;
+            _plateNoInput = string.Empty;
+            _parkingLotIdText = CurrentUserContext.CurrentParkingLot?.Id.ToString() ?? string.Empty;
+            _selectedOpenTransaction = null;
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            _pendingFocusTicket = true;
         }
     }
 

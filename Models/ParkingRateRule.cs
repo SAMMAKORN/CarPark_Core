@@ -29,5 +29,7 @@ namespace CarPark.Models
         public ParkingLot? ParkingLot { get; set; }
 
         public ParkingLotSchedule? ParkingSchedule { get; set; }
+
+        public ICollection<ParkingRateCondition> Conditions { get; set; } = [];
     }
 }

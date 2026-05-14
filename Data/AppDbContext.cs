@@ -40,6 +40,16 @@ namespace CarPark.Data
                     .OnDelete(DeleteBehavior.NoAction);
             });
 
+            modelBuilder.Entity<ParkingRateCondition>(entity =>
+            {
+                entity.ToTable("ParkingRateConditions");
+                entity.Property(x => x.ConditionName).HasMaxLength(200).IsRequired();
+                entity.HasOne(x => x.Rule)
+                    .WithMany(x => x.Conditions)
+                    .HasForeignKey(x => x.ParkingRateRuleId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<ParkingGate>(entity =>
             {
                 entity.ToTable("ParkingGates");
@@ -115,6 +125,7 @@ namespace CarPark.Data
         public DbSet<ParkingGate> ParkingGates { get; set; }
         public DbSet<ParkingLotSchedule> ParkingLotSchedules { get; set; }
         public DbSet<ParkingRateRule> ParkingRateRules { get; set; }
+        public DbSet<ParkingRateCondition> ParkingRateConditions { get; set; }
         public DbSet<User> Users { get; set; }
     }
 }
