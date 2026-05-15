@@ -50,7 +50,7 @@ else
                                                 @onmousedown="() => SelectOpenTicket(ticket)">
                                             <div class="fw-semibold">@ticket.TicketNo</div>
                                             <small class="@(_selectedOpenTransaction?.Id == ticket.Id ? "text-white-50" : "text-muted")">
-                                                @ticket.PlateNo &nbsp;·&nbsp; @(ticket.ParkingLot?.LotCode ?? "-")
+                                                @ticket.PlateNo &nbsp;·&nbsp; @(ticket.ParkingLot?.LotName ?? "-")
                                             </small>
                                         </button>
                                     }
@@ -127,7 +127,7 @@ else
                                 </tr>
                                 <tr>
                                     <td class="text-muted fw-semibold">ลานจอดรถ</td>
-                                    <td>@(_modalTransaction.ParkingLot?.LotCode ?? _lots.FirstOrDefault(x => x.Id == _modalTransaction.ParkingLotId)?.LotCode ?? "-")</td>
+                                    <td>@(_modalTransaction.ParkingLot?.LotName ?? _lots.FirstOrDefault(x => x.Id == _modalTransaction.ParkingLotId)?.LotName ?? "-")</td>
                                 </tr>
                                 @if (_modalTransaction.InGate is not null)
                                 {
@@ -266,6 +266,7 @@ else
                                 <th>เวลาออก</th>
                                 <th>นาที</th>
                                 <th>ยอด (บาท)</th>
+                                <th>เงื่อนไข</th>
                                 <th>หมายเหตุ</th>
                                 <th></th>
                             </tr>
@@ -278,7 +279,7 @@ else
                                     <tr class="table-warning">
                                         <td><input class="form-control form-control-sm" @bind="_editTicketNo" /></td>
                                         <td><input class="form-control form-control-sm" @bind="_editPlateNo" /></td>
-                                        <td class="text-muted">@(tx.ParkingLot?.LotCode ?? "-")</td>
+                                        <td class="text-muted">@(tx.ParkingLot?.LotName ?? "-")</td>
                                         <td class="text-muted">@(tx.InGate?.GateName ?? "-")</td>
                                         <td class="text-muted">@(tx.OutGate?.GateName ?? "-")</td>
                                         <td class="text-muted">@(tx.OutAt.HasValue ? "ออก" : "เข้า")</td>
@@ -286,6 +287,24 @@ else
                                         <td><input class="form-control form-control-sm" type="datetime-local" @bind="_editOutAt" /></td>
                                         <td class="text-muted">-</td>
                                         <td><input class="form-control form-control-sm" type="number" step="0.01" min="0" @bind="_editTotalAmount" placeholder="-" /></td>
+                                        <td>
+                                            @if (tx.OutAt.HasValue)
+                                            {
+                                                <select class="form-select form-select-sm"
+                                                        value="@(_editConditionId?.ToString() ?? "")"
+                                                        @onchange="e => _editConditionId = string.IsNullOrEmpty(e.Value?.ToString()) ? null : Guid.Parse(e.Value.ToString()!)">
+                                                    <option value="">— ไม่มีเงื่อนไข —</option>
+                                                    @foreach (var c in _editConditions)
+                                                    {
+                                                        <option value="@c.Id">@c.ConditionName</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
                                         <td><input class="form-control form-control-sm" @bind="_editRemark" placeholder="-" /></td>
                                         <td class="text-end" style="white-space: nowrap">
                                             <button class="btn btn-sm btn-success me-1" @onclick="SaveTxEditAsync">บันทึก</button>
@@ -298,7 +317,7 @@ else
                                     <tr>
                                         <td>@tx.TicketNo</td>
                                         <td>@tx.PlateNo</td>
-                                        <td>@(tx.ParkingLot?.LotCode ?? "-")</td>
+                                        <td>@(tx.ParkingLot?.LotName ?? "-")</td>
                                         <td>@(tx.InGate?.GateName ?? "-")</td>
                                         <td>@(tx.OutGate?.GateName ?? "-")</td>
                                         <td>@(tx.OutAt.HasValue ? "ออก" : "เข้า")</td>
@@ -306,6 +325,7 @@ else
                                         <td>@ToLocalDateTimeText(tx.OutAt)</td>
                                         <td>@GetDisplayMinutes(tx)</td>
                                         <td>@(tx.TotalAmount?.ToString("0.00") ?? "-")</td>
+                                        <td>@(tx.ParkingCondition?.ConditionName ?? "-")</td>
                                         <td>@(tx.Remark ?? "-")</td>
                                         <td class="text-end">
                                             <button class="btn btn-sm btn-outline-primary" @onclick="() => StartTxEdit(tx)">แก้ไข</button>
@@ -353,6 +373,9 @@ else
     private DateTime? _editOutAt;
     private decimal? _editTotalAmount;
     private string _editRemark = string.Empty;
+    private Guid? _editConditionId;
+    private Guid? _editOriginalConditionId;
+    private List<ParkingCondition> _editConditions = [];
 
     private bool _showModal;
     private bool _isCheckIn;
@@ -580,11 +603,11 @@ else
         if (_selectedOpenTransaction is not null)
         {
             var openLot = _lots.FirstOrDefault(x => x.Id == _selectedOpenTransaction.ParkingLotId);
-            return openLot is not null ? $"{openLot.LotCode} - {openLot.LotName}" : _parkingLotIdText;
+            return openLot is not null ? openLot.LotName : _parkingLotIdText;
         }
 
         var sessionLot = CurrentUserContext.CurrentParkingLot;
-        return sessionLot is not null ? $"{sessionLot.LotCode} - {sessionLot.LotName}" : string.Empty;
+        return sessionLot?.LotName ?? string.Empty;
     }
 
     private void StartLiveUpdates()
@@ -631,7 +654,7 @@ else
         return Math.Max(0, runningMinutes);
     }
 
-    private void StartTxEdit(ParkingTransactionModel tx)
+    private async Task StartTxEdit(ParkingTransactionModel tx)
     {
         ClearMessages();
         _editingTxId = tx.Id;
@@ -641,6 +664,13 @@ else
         _editOutAt = tx.OutAt?.ToLocalTime();
         _editTotalAmount = tx.TotalAmount;
         _editRemark = tx.Remark ?? string.Empty;
+        _editConditionId = tx.ParkingConditionId;
+        _editOriginalConditionId = tx.ParkingConditionId;
+
+        if (tx.OutAt.HasValue)
+            _editConditions = await ParkingTransactionService.GetApplicableConditionsAsync(tx.ParkingLotId);
+        else
+            _editConditions = [];
     }
 
     private void CancelTxEdit()
@@ -653,6 +683,9 @@ else
         if (_editingTxId is null) return;
         ClearMessages();
 
+        var isCheckedOut = _editOutAt.HasValue;
+        var conditionChanged = _editConditionId != _editOriginalConditionId;
+
         try
         {
             await ParkingTransactionService.UpdateAsync(
@@ -663,6 +696,9 @@ else
                 _editOutAt,
                 _editTotalAmount,
                 _editRemark);
+
+            if (isCheckedOut && conditionChanged)
+                await ParkingTransactionService.CorrectConditionAsync(_editingTxId.Value, _editConditionId);
 
             _editingTxId = null;
             _successMessage = "แก้ไขรายการสำเร็จ";

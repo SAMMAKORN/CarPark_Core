@@ -12,24 +12,75 @@
 }
 
 .sidebar {
-    background: linear-gradient(165deg, rgba(9, 35, 48, 0.94), rgba(19, 74, 85, 0.94));
-    border-right: 1px solid rgba(255, 255, 255, 0.14);
+    background: linear-gradient(165deg, rgba(9, 35, 48, 0.95), rgba(19, 74, 85, 0.95));
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .app-top {
-    min-height: 3.8rem;
-    border-bottom: 1px solid rgba(12, 52, 60, 0.15);
+    min-height: 3.6rem;
+    border-bottom: 1px solid rgba(12, 52, 60, 0.12);
     display: flex;
     align-items: center;
-    background: rgba(250, 253, 251, 0.8);
-    backdrop-filter: blur(8px);
+    justify-content: space-between;
+    background: rgba(250, 253, 251, 0.85);
+    backdrop-filter: blur(10px);
+    gap: 1rem;
+}
+
+.top-row-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
 }
 
 .top-row-title {
     font-family: "Cambria", "Times New Roman", serif;
-    font-size: 1.05rem;
+    font-size: 1rem;
     letter-spacing: 0.03em;
     color: #17414a;
+    white-space: nowrap;
+}
+
+/* Lot / gate indicator in top bar (visible on mobile when sidebar is hidden) */
+.top-row-lot {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(74, 222, 128, 0.09);
+    border: 1px solid rgba(74, 222, 128, 0.22);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem 0.2rem 0.55rem;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.top-lot-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+}
+
+.top-lot-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #155e35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.top-lot-sep {
+    color: #6b9e7a;
+    font-size: 0.75rem;
+}
+
+.top-lot-gate {
+    font-size: 0.78rem;
+    color: #2e7d52;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .content {
@@ -56,7 +107,7 @@
     }
 
         .page.layout-auth .sidebar {
-            width: 280px;
+            width: 260px;
             height: 100vh;
             position: sticky;
             top: 0;
@@ -66,6 +117,11 @@
             position: sticky;
             top: 0;
             z-index: 2;
+        }
+
+        /* hide lot chip in top bar on desktop — sidebar already shows it */
+        .page.layout-auth .top-row-lot {
+            display: none;
         }
 
         .page.layout-auth .content {

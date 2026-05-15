@@ -27,53 +27,90 @@ else
                 <div class="card-body">
                     <div class="mb-3">
                         <label class="form-label" for="username">ชื่อผู้ใช้</label>
-                        <input class="form-control" id="username" @bind="_username" />
+                        <input class="form-control @((_touched && string.IsNullOrWhiteSpace(_username)) ? "is-invalid" : "")"
+                               id="username"
+                               @ref="_usernameRef"
+                               @bind="_username"
+                               @bind:event="oninput"
+                               @onkeydown="OnKeyDown"
+                               autocomplete="username"
+                               placeholder="กรอกชื่อผู้ใช้" />
+                        @if (_touched && string.IsNullOrWhiteSpace(_username))
+                        {
+                            <div class="invalid-feedback">กรุณากรอกชื่อผู้ใช้</div>
+                        }
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label" for="password">รหัสผ่าน</label>
-                        <input class="form-control" id="password" type="password" @bind="_password" />
+                        <input class="form-control @((_touched && string.IsNullOrWhiteSpace(_password)) ? "is-invalid" : "")"
+                               id="password"
+                               type="password"
+                               @bind="_password"
+                               @bind:event="oninput"
+                               @onkeydown="OnKeyDown"
+                               autocomplete="current-password"
+                               placeholder="กรอกรหัสผ่าน" />
+                        @if (_touched && string.IsNullOrWhiteSpace(_password))
+                        {
+                            <div class="invalid-feedback">กรุณากรอกรหัสผ่าน</div>
+                        }
                     </div>
 
                     @if (_parkingLots.Count > 0)
                     {
                         <div class="mb-3">
                             <label class="form-label" for="parkinglot">ลานจอดรถ</label>
-                            <select class="form-select" id="parkinglot"
+                            <select class="form-select @((_touched && string.IsNullOrWhiteSpace(_selectedParkingLotId)) ? "is-invalid" : "")"
+                                    id="parkinglot"
                                     @bind="_selectedParkingLotId"
                                     @bind:after="OnLotChangedAsync">
                                 <option value="">-- เลือกลานจอดรถ --</option>
                                 @foreach (var lot in _parkingLots)
                                 {
                                     var hours = lot.IsAllDay ? "ตลอดเวลา" : $"{lot.OpenTime.ToString(@"hh\:mm")}-{lot.CloseTime.ToString(@"hh\:mm")}";
-                                    <option value="@lot.Id">@lot.LotCode — @lot.LotName (@hours)</option>
+                                    <option value="@lot.Id">@lot.LotName (@hours)</option>
                                 }
                             </select>
+                            @if (_touched && string.IsNullOrWhiteSpace(_selectedParkingLotId))
+                            {
+                                <div class="invalid-feedback">กรุณาเลือกลานจอดรถ</div>
+                            }
                         </div>
 
                         @if (_gates.Count > 0)
                         {
                             <div class="mb-3">
                                 <label class="form-label" for="gate">ประตู</label>
-                                <select class="form-select" id="gate" @bind="_selectedGateId">
+                                <select class="form-select @((_touched && string.IsNullOrWhiteSpace(_selectedGateId)) ? "is-invalid" : "")"
+                                        id="gate"
+                                        @bind="_selectedGateId">
                                     <option value="">-- เลือกประตู --</option>
                                     @foreach (var gate in _gates)
                                     {
                                         <option value="@gate.Id">@gate.GateName</option>
                                     }
                                 </select>
+                                @if (_touched && string.IsNullOrWhiteSpace(_selectedGateId))
+                                {
+                                    <div class="invalid-feedback">กรุณาเลือกประตู</div>
+                                }
                             </div>
                         }
                     }
 
-                    <button class="btn btn-primary w-100" @onclick="LoginAsync">เข้าสู่ระบบ</button>
-
                     @if (!string.IsNullOrWhiteSpace(_errorMessage))
                     {
-                        <div class="alert alert-danger mt-3" role="alert">
-                            @_errorMessage
-                        </div>
+                        <div class="alert alert-danger mb-3">@_errorMessage</div>
                     }
+
+                    <button class="btn btn-primary w-100" @onclick="LoginAsync" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        เข้าสู่ระบบ
+                    </button>
                 </div>
             </div>
         </div>
@@ -88,11 +125,26 @@ else
     private string _selectedGateId = string.Empty;
     private List<CarPark.Models.ParkingLot> _parkingLots = new();
     private List<CarPark.Models.ParkingGate> _gates = new();
+    private bool _touched;
+    private bool _isLoading;
+    private ElementReference _usernameRef;
 
     protected override async Task OnInitializedAsync()
     {
         var all = await ParkingLotService.GetAllAsync();
         _parkingLots = all.Where(x => x.IsActive).ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await _usernameRef.FocusAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await LoginAsync();
     }
 
     private async Task OnLotChangedAsync()
@@ -101,61 +153,59 @@ else
         _gates.Clear();
 
         if (Guid.TryParse(_selectedParkingLotId, out var lotId))
-        {
             _gates = await ParkingGateService.GetActiveByLotIdAsync(lotId);
-        }
     }
 
     private async Task LoginAsync()
     {
+        _touched = true;
         _errorMessage = string.Empty;
 
         if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
-        {
-            _errorMessage = "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน";
             return;
-        }
 
         if (_parkingLots.Count > 0)
         {
             if (string.IsNullOrWhiteSpace(_selectedParkingLotId))
-            {
-                _errorMessage = "กรุณาเลือกลานจอดรถ";
                 return;
-            }
 
             if (_gates.Count > 0 && string.IsNullOrWhiteSpace(_selectedGateId))
-            {
-                _errorMessage = "กรุณาเลือกประตู";
                 return;
-            }
         }
 
-        var user = await UserAuthService.LoginAsync(_username, _password);
-        if (user is null)
+        _isLoading = true;
+        try
         {
-            _errorMessage = "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง";
-            return;
-        }
-
-        if (_parkingLots.Count > 0)
-        {
-            var selectedLot = _parkingLots.FirstOrDefault(x => x.Id.ToString() == _selectedParkingLotId);
-            if (selectedLot is null)
+            var user = await UserAuthService.LoginAsync(_username, _password);
+            if (user is null)
             {
-                _errorMessage = "ลานจอดรถที่เลือกไม่พร้อมใช้งาน";
+                _errorMessage = "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง";
                 return;
             }
 
-            CurrentUserContext.SelectParkingLot(selectedLot);
+            if (_parkingLots.Count > 0)
+            {
+                var selectedLot = _parkingLots.FirstOrDefault(x => x.Id.ToString() == _selectedParkingLotId);
+                if (selectedLot is null)
+                {
+                    _errorMessage = "ลานจอดรถที่เลือกไม่พร้อมใช้งาน";
+                    return;
+                }
 
-            var selectedGate = _gates.FirstOrDefault(x => x.Id.ToString() == _selectedGateId);
-            CurrentUserContext.SelectGate(selectedGate);
+                CurrentUserContext.SelectParkingLot(selectedLot);
 
-            var rules = await ParkingRateRuleService.GetActiveRulesByLotAsync(selectedLot.Id);
-            CurrentUserContext.SetCachedRules(selectedLot.Id, rules);
+                var selectedGate = _gates.FirstOrDefault(x => x.Id.ToString() == _selectedGateId);
+                CurrentUserContext.SelectGate(selectedGate);
+
+                var rules = await ParkingRateRuleService.GetActiveRulesByLotAsync(selectedLot.Id);
+                CurrentUserContext.SetCachedRules(selectedLot.Id, rules);
+            }
+
+            NavigationManager.NavigateTo("/");
         }
-
-        NavigationManager.NavigateTo("/");
+        finally
+        {
+            _isLoading = false;
+        }
     }
 }

@@ -5,8 +5,6 @@ namespace CarPark.Models
 {
     public class ParkingLot : BaseEntity
     {
-        public string LotCode { get; set; } = string.Empty;
-
         public string LotName { get; set; } = string.Empty;
 
         public bool IsAllDay { get; set; } = true;

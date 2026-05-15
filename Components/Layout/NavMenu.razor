@@ -15,44 +15,69 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column app-nav-list">
-        @if (CurrentUserContext.IsAuthenticated && IsChangePasswordPage)
+        @if (CurrentUserContext.IsAuthenticated && CurrentUserContext.MustChangePassword)
         {
             <div class="nav-item px-3 mt-2">
-                <button class="btn btn-outline-light btn-sm w-100" @onclick="Logout">ออกจากระบบ</button>
+                <button class="nav-logout-btn btn btn-outline-light btn-sm w-100" @onclick="Logout">ออกจากระบบ</button>
             </div>
         }
         else if (CurrentUserContext.IsAuthenticated)
         {
-            <div class="nav-item px-3 user-chip">
-                <div class="user-chip-name">@CurrentUserContext.CurrentName</div>
-                <div class="user-chip-meta">@CurrentUserContext.CurrentUsername (@CurrentUserContext.CurrentRole)</div>
+            <div class="nav-user-card">
+                <div class="nav-user-name">@CurrentUserContext.CurrentName</div>
+                <span class="nav-role-badge @(CurrentUserContext.IsAdmin ? "nav-role-admin" : "")">
+                    @CurrentUserContext.CurrentRole
+                </span>
+            </div>
+
+            @if (CurrentUserContext.CurrentParkingLot is not null)
+            {
+                <div class="nav-lot-chip">
+                    <div class="nav-lot-dot"></div>
+                    <div class="nav-lot-body">
+                        <div class="nav-lot-name">@CurrentUserContext.CurrentParkingLot.LotName</div>
+                        <div class="nav-lot-gate">
+                            @if (CurrentUserContext.CurrentGate is not null)
+                            {
+                                @CurrentUserContext.CurrentGate.GateName
+                            }
+                            else
+                            {
+                                <span style="opacity:.55">ไม่ระบุประตู</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="nav-section-label">ปฏิบัติการ</div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/parking-transaction">รายการจอดรถ</NavLink>
             </div>
 
             @if (CurrentUserContext.IsAdmin)
             {
+                <div class="nav-section-label">จัดการระบบ</div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="/manage/user">จัดการผู้ใช้</NavLink>
+                    <NavLink class="nav-link" href="/manage/parking-lot">ลานจอดรถ</NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="/manage/parking-lot">จัดการลานจอดรถ</NavLink>
+                    <NavLink class="nav-link" href="/manage/parking-condition">เงื่อนไขจอดรถ</NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="/manage/parking-condition">จัดการเงื่อนไขจอดรถ</NavLink>
+                    <NavLink class="nav-link" href="/manage/user">ผู้ใช้งาน</NavLink>
                 </div>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="/report/parking-transaction">รายงาน</NavLink>
                 </div>
             }
 
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="/parking-transaction">รายการจอดรถ</NavLink>
-            </div>
+            <div class="nav-section-label">บัญชี</div>
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="/change-password">เปลี่ยนรหัสผ่าน</NavLink>
             </div>
-
-            <div class="nav-item px-3 mt-2">
-                <button class="btn btn-outline-light btn-sm w-100" @onclick="Logout">ออกจากระบบ</button>
+            <div class="nav-item px-3 mt-1">
+                <button class="nav-logout-btn btn btn-sm w-100" @onclick="Logout">ออกจากระบบ</button>
             </div>
         }
     </nav>
@@ -64,10 +89,4 @@
         UserAuthService.Logout();
         NavigationManager.NavigateTo("/login");
     }
-
-    private bool IsChangePasswordPage =>
-        NavigationManager.ToBaseRelativePath(NavigationManager.Uri)
-            .Split('?', '#')[0]
-            .Trim('/')
-            .Equals("change-password", StringComparison.OrdinalIgnoreCase);
 }

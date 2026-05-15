@@ -15,57 +15,54 @@
 
 @if (!CurrentUserContext.IsAuthenticated)
 {
-    <div class="alert alert-danger" role="alert">
-        กรุณาเข้าสู่ระบบก่อนใช้งานหน้านี้
-    </div>
+    <div class="alert alert-danger">กรุณาเข้าสู่ระบบก่อนใช้งานหน้านี้</div>
 }
 else
 {
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible mb-3">
+            @_errorMessage
+            <button type="button" class="btn-close" @onclick="() => _errorMessage = string.Empty"></button>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success alert-dismissible mb-3">
+            @_successMessage
+            <button type="button" class="btn-close" @onclick="() => _successMessage = string.Empty"></button>
+        </div>
+    }
+
     <div class="card mb-3">
         <div class="card-body">
-            <div class="d-flex align-items-end gap-3 flex-wrap">
-                <div>
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-4 col-md-3">
                     <label class="form-label">วันที่เริ่ม</label>
                     <input class="form-control" type="date" @bind="_dateFrom" />
                 </div>
-                <div>
+                <div class="col-sm-4 col-md-3">
                     <label class="form-label">วันที่สิ้นสุด</label>
                     <input class="form-control" type="date" @bind="_dateTo" />
                 </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-primary" @onclick="SearchAsync">ค้นหา</button>
-                    <button class="btn btn-success" @onclick="ExportExcelAsync" disabled="@(_transactions.Count == 0)">
-                        Export Excel
+                <div class="col-sm-4 col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1" @onclick="SearchAsync">ค้นหา</button>
+                    <button class="btn btn-success" @onclick="ExportExcelAsync"
+                            disabled="@(_transactions.Count == 0)" title="Export Excel">
+                        Excel
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    @if (_isLoading)
     {
-        <div class="alert alert-danger mb-3" role="alert">@_errorMessage</div>
+        <p class="text-muted">กำลังโหลด...</p>
     }
-
-    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    else if (_hasSearched)
     {
-        <div class="alert alert-success mb-3" role="alert">@_successMessage</div>
-    }
-
-    @if (_hasSearched)
-    {
-        <div class="d-flex gap-3 mb-3 flex-wrap">
-            <span class="badge bg-secondary fs-6">ทั้งหมด @_transactions.Count รายการ</span>
-            <span class="badge bg-warning text-dark fs-6">ยังจอดอยู่ @_transactions.Count(x => !x.OutAt.HasValue) รายการ</span>
-            <span class="badge bg-success fs-6">ออกแล้ว @_transactions.Count(x => x.OutAt.HasValue) รายการ</span>
-            <span class="badge bg-primary fs-6">รายรับรวม @_transactions.Where(x => x.TotalAmount.HasValue).Sum(x => x.TotalAmount!.Value).ToString("0.00") บาท</span>
-        </div>
-
-        @if (_isLoading)
-        {
-            <p>กำลังโหลด...</p>
-        }
-        else if (_transactions.Count == 0)
+        @if (_transactions.Count == 0)
         {
             <div class="alert alert-info">ไม่พบรายการในช่วงวันที่ที่เลือก</div>
         }
@@ -73,9 +70,19 @@ else
         {
             <div class="card">
                 <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <h5 class="card-title mb-0">ผลการค้นหา</h5>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge bg-secondary">ทั้งหมด @_transactions.Count</span>
+                            <span class="badge bg-warning text-dark">จอดอยู่ @_transactions.Count(x => !x.OutAt.HasValue)</span>
+                            <span class="badge bg-success">ออกแล้ว @_transactions.Count(x => x.OutAt.HasValue)</span>
+                            <span class="badge bg-primary">รายรับ @_transactions.Where(x => x.TotalAmount.HasValue).Sum(x => x.TotalAmount!.Value).ToString("N2") ฿</span>
+                        </div>
+                    </div>
+
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover align-middle">
-                            <thead class="table-dark">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
                                 <tr>
                                     <th>#</th>
                                     <th>หมายเลขบัตร</th>
@@ -94,10 +101,10 @@ else
                                 @foreach (var tx in _transactions)
                                 {
                                     <tr>
-                                        <td class="text-muted">@(rowNo++)</td>
+                                        <td class="text-muted small">@(rowNo++)</td>
                                         <td>@tx.TicketNo</td>
                                         <td>@tx.PlateNo</td>
-                                        <td>@(tx.ParkingLot is not null ? $"{tx.ParkingLot.LotCode} - {tx.ParkingLot.LotName}" : "-")</td>
+                                        <td class="small">@(tx.ParkingLot?.LotName ?? "-")</td>
                                         <td>
                                             @if (tx.OutAt.HasValue)
                                             {
@@ -108,10 +115,10 @@ else
                                                 <span class="badge bg-warning text-dark">เข้า</span>
                                             }
                                         </td>
-                                        <td>@tx.InAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
-                                        <td>@(tx.OutAt.HasValue ? tx.OutAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "-")</td>
-                                        <td class="text-end">@(tx.TotalMinutes?.ToString() ?? "-")</td>
-                                        <td class="text-end">@(tx.TotalAmount?.ToString("0.00") ?? "-")</td>
+                                        <td class="small">@tx.InAt.ToLocalTime().ToString("dd/MM/yy HH:mm")</td>
+                                        <td class="small">@(tx.OutAt.HasValue ? tx.OutAt.Value.ToLocalTime().ToString("dd/MM/yy HH:mm") : "–")</td>
+                                        <td class="text-end">@(tx.TotalMinutes?.ToString() ?? "–")</td>
+                                        <td class="text-end fw-semibold">@(tx.TotalAmount?.ToString("N2") ?? "–")</td>
                                         <td class="text-center">@(tx.IsOvernight ? "✓" : "")</td>
                                     </tr>
                                 }
@@ -120,7 +127,7 @@ else
                                 <tr>
                                     <td colspan="7" class="text-end">รวม</td>
                                     <td class="text-end">@_transactions.Where(x => x.TotalMinutes.HasValue).Sum(x => x.TotalMinutes!.Value)</td>
-                                    <td class="text-end">@_transactions.Where(x => x.TotalAmount.HasValue).Sum(x => x.TotalAmount!.Value).ToString("0.00")</td>
+                                    <td class="text-end">@_transactions.Where(x => x.TotalAmount.HasValue).Sum(x => x.TotalAmount!.Value).ToString("N2")</td>
                                     <td></td>
                                 </tr>
                             </tfoot>
@@ -162,14 +169,8 @@ else
             _transactions.Clear();
             _transactions.AddRange(result);
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _isLoading = false; }
     }
 
     private async Task ExportExcelAsync()
@@ -184,7 +185,6 @@ else
             using var package = new ExcelPackage();
             var ws = package.Workbook.Worksheets.Add("รายงานจอดรถ");
 
-            // Title
             ws.Cells["A1"].Value = "รายงานจอดรถ";
             ws.Cells["A1:J1"].Merge = true;
             ws.Cells["A1"].Style.Font.Bold = true;
@@ -196,41 +196,33 @@ else
             ws.Cells["A2"].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
             ws.Cells["A2"].Style.Font.Color.SetColor(Color.Gray);
 
-            // Header
             var headers = new[] { "#", "หมายเลขบัตร", "ทะเบียนรถ", "ลานจอดรถ", "สถานะ", "เวลาเข้า", "เวลาออก", "นาที", "ยอด (บาท)", "ค้างคืน" };
             for (int i = 0; i < headers.Length; i++)
-            {
                 ws.Cells[4, i + 1].Value = headers[i];
-            }
 
-            using (var headerRange = ws.Cells[4, 1, 4, headers.Length])
+            using (var hr = ws.Cells[4, 1, 4, headers.Length])
             {
-                headerRange.Style.Font.Bold = true;
-                headerRange.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                headerRange.Style.Fill.BackgroundColor.SetColor(Color.FromArgb(33, 37, 41));
-                headerRange.Style.Font.Color.SetColor(Color.White);
-                headerRange.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                headerRange.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                hr.Style.Font.Bold = true;
+                hr.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                hr.Style.Fill.BackgroundColor.SetColor(Color.FromArgb(33, 37, 41));
+                hr.Style.Font.Color.SetColor(Color.White);
+                hr.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                hr.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
             }
 
-            // Rows
-            int row = 5;
-            int rowNo = 1;
+            int row = 5, rowNo = 1;
             foreach (var tx in _transactions)
             {
                 ws.Cells[row, 1].Value = rowNo++;
                 ws.Cells[row, 2].Value = tx.TicketNo;
                 ws.Cells[row, 3].Value = tx.PlateNo;
-                ws.Cells[row, 4].Value = tx.ParkingLot is not null
-                    ? $"{tx.ParkingLot.LotCode} - {tx.ParkingLot.LotName}"
-                    : "-";
+                ws.Cells[row, 4].Value = tx.ParkingLot?.LotName ?? "-";
                 ws.Cells[row, 5].Value = tx.OutAt.HasValue ? "ออก" : "เข้า";
                 ws.Cells[row, 6].Value = tx.InAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
                 ws.Cells[row, 7].Value = tx.OutAt.HasValue ? tx.OutAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "-";
                 ws.Cells[row, 8].Value = tx.TotalMinutes;
                 ws.Cells[row, 9].Value = tx.TotalAmount;
                 ws.Cells[row, 10].Value = tx.IsOvernight ? "✓" : "";
-
                 ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Right;
                 ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Right;
                 ws.Cells[row, 9].Style.Numberformat.Format = "#,##0.00";
@@ -238,18 +230,15 @@ else
 
                 if (row % 2 == 0)
                 {
-                    using var rowRange = ws.Cells[row, 1, row, headers.Length];
-                    rowRange.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                    rowRange.Style.Fill.BackgroundColor.SetColor(Color.FromArgb(248, 249, 250));
+                    using var rr = ws.Cells[row, 1, row, headers.Length];
+                    rr.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                    rr.Style.Fill.BackgroundColor.SetColor(Color.FromArgb(248, 249, 250));
                 }
-
                 row++;
             }
 
-            // Summary row
             var totalAmount = _transactions.Where(x => x.TotalAmount.HasValue).Sum(x => x.TotalAmount!.Value);
             var totalMinutes = _transactions.Where(x => x.TotalMinutes.HasValue).Sum(x => x.TotalMinutes!.Value);
-
             ws.Cells[row, 7].Value = "รวม";
             ws.Cells[row, 7].Style.Font.Bold = true;
             ws.Cells[row, 7].Style.HorizontalAlignment = ExcelHorizontalAlignment.Right;
@@ -261,33 +250,22 @@ else
             ws.Cells[row, 9].Style.Numberformat.Format = "#,##0.00";
             ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Right;
 
-            using (var sumRange = ws.Cells[row, 1, row, headers.Length])
+            using (var sr = ws.Cells[row, 1, row, headers.Length])
             {
-                sumRange.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                sumRange.Style.Fill.BackgroundColor.SetColor(Color.FromArgb(220, 220, 220));
-                sumRange.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                sr.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                sr.Style.Fill.BackgroundColor.SetColor(Color.FromArgb(220, 220, 220));
+                sr.Style.Border.Top.Style = ExcelBorderStyle.Thin;
             }
 
             ws.Cells[ws.Dimension.Address].AutoFitColumns();
             ws.Column(1).Width = 6;
 
-            // Save
             var fileName = $"ParkingReport_{_dateFrom:yyyyMMdd}_{_dateTo:yyyyMMdd}.xlsx";
-            var folder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            var filePath = Path.Combine(folder, fileName);
-
+            var filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), fileName);
             await package.SaveAsAsync(new FileInfo(filePath));
-
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(filePath)
-            {
-                UseShellExecute = true
-            });
-
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(filePath) { UseShellExecute = true });
             _successMessage = $"ส่งออกสำเร็จ: {filePath}";
         }
-        catch (Exception ex)
-        {
-            _errorMessage = $"ส่งออกไม่สำเร็จ: {ex.Message}";
-        }
+        catch (Exception ex) { _errorMessage = $"ส่งออกไม่สำเร็จ: {ex.Message}"; }
     }
 }

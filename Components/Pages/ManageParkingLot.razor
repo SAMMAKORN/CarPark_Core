@@ -20,231 +20,103 @@
 }
 else
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">เพิ่มลานจอดรถ</h5>
-
-            <div class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label" for="lotCode">รหัสลาน</label>
-                    <input class="form-control" id="lotCode" @bind="_newLotCode" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label" for="lotName">ชื่อลาน</label>
-                    <input class="form-control" id="lotName" @bind="_newLotName" />
-                </div>
-                <div class="col-md-2">
-                    <div class="form-check mt-4">
-                        <input class="form-check-input" type="checkbox" id="newAllDay" @bind="_newLotIsAllDay" />
-                        <label class="form-check-label" for="newAllDay">เปิดตลอดเวลา</label>
-                    </div>
-                </div>
-                @if (!_newLotIsAllDay)
-                {
-                    <div class="col-md-1">
-                        <label class="form-label">เปิด</label>
-                        <input class="form-control" type="time" @bind="_newLotOpenTime" />
-                    </div>
-                    <div class="col-md-1">
-                        <label class="form-label">ปิด</label>
-                        <input class="form-control" type="time" @bind="_newLotCloseTime" />
-                    </div>
-                    <div class="col-md-1">
-                        <label class="form-label">เก็บค่าเริ่ม <small class="text-muted">(ไม่บังคับ)</small></label>
-                        <input class="form-control" type="time" value="@_newLotBillingStart?.ToString("HH:mm")"
-                               @onchange="e => _newLotBillingStart = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
-                    </div>
-                    <div class="col-md-1">
-                        <label class="form-label">เก็บค่าสิ้นสุด</label>
-                        <input class="form-control" type="time" value="@_newLotBillingEnd?.ToString("HH:mm")"
-                               @onchange="e => _newLotBillingEnd = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
-                    </div>
-                }
-                <div class="col-md-2">
-                    <div class="form-check mt-4">
-                        <input class="form-check-input" type="checkbox" id="newHasOvernight" @bind="_newLotHasOvernightPenalty" />
-                        <label class="form-check-label" for="newHasOvernight">ค่าปรับข้ามคืน</label>
-                    </div>
-                </div>
-                @if (_newLotHasOvernightPenalty)
-                {
-                    <div class="col-md-2">
-                        <label class="form-label">จำนวนเงิน</label>
-                        <input class="form-control" type="number" min="0" step="0.01" @bind="_newLotOvernightPenaltyAmount" />
-                    </div>
-                }
-                <div class="col-md-1">
-                    <div class="form-check mt-4">
-                        <input class="form-check-input" type="checkbox" id="lotActive" @bind="_newLotIsActive" />
-                        <label class="form-check-label" for="lotActive">ใช้งาน</label>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <button class="btn btn-primary w-100" @onclick="AddLotAsync">เพิ่ม</button>
-                </div>
-            </div>
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible mb-3" role="alert">
+            @_errorMessage
+            <button type="button" class="btn-close" @onclick="ClearMessages"></button>
         </div>
-    </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success alert-dismissible mb-3" role="alert">
+            @_successMessage
+            <button type="button" class="btn-close" @onclick="ClearMessages"></button>
+        </div>
+    }
 
     <div class="card mb-3">
         <div class="card-body">
-            <h5 class="card-title">คัดลอกการตั้งค่าลาน</h5>
-            <p class="text-muted small mb-2">คัดลอกเวลาทำการ ค่าปรับข้ามคืน ตารางเวลา และอัตราค่าบริการทั้งหมดจากลานต้นทางไปยังลานปลายทาง (ข้อมูลเดิมของลานปลายทางจะถูกแทนที่)</p>
-            <div class="row g-2 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label">ลานต้นทาง</label>
-                    <select class="form-select" @bind="_copySourceLotId">
-                        <option value="">-- เลือกลานต้นทาง --</option>
-                        @foreach (var lot in _lots)
-                        {
-                            <option value="@lot.Id">@lot.LotCode - @lot.LotName</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">ลานปลายทาง</label>
-                    <select class="form-select" @bind="_copyTargetLotId">
-                        <option value="">-- เลือกลานปลายทาง --</option>
-                        @foreach (var lot in _lots)
-                        {
-                            <option value="@lot.Id">@lot.LotCode - @lot.LotName</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button class="btn btn-outline-secondary w-100"
-                            @onclick="CopyLotAsync"
-                            disabled="@(string.IsNullOrWhiteSpace(_copySourceLotId) || string.IsNullOrWhiteSpace(_copyTargetLotId))">
-                        คัดลอก
-                    </button>
-                </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title mb-0">รายการลานจอดรถ</h5>
+                <button class="btn btn-primary" @onclick="OpenAddModal">+ เพิ่มลานจอดรถ</button>
             </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title">รายการลานจอดรถ</h5>
 
             @if (_isLoading)
             {
-                <p>กำลังโหลด...</p>
+                <p class="text-muted">กำลังโหลด...</p>
             }
             else if (_lots.Count == 0)
             {
-                <p>ไม่พบรายการลานจอดรถ</p>
+                <p class="text-muted">ยังไม่มีลานจอดรถ กดปุ่ม "เพิ่มลานจอดรถ" เพื่อเริ่มต้น</p>
             }
             else
             {
                 <div class="table-responsive">
-                    <table class="table table-striped align-middle">
-                        <thead>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
                             <tr>
-                                <th>รหัสลาน</th>
                                 <th>ชื่อลาน</th>
                                 <th>เวลาทำการ</th>
                                 <th>ค่าปรับข้ามคืน</th>
-                                <th>ใช้งาน</th>
-                                <th class="text-end">จัดการ</th>
+                                <th>สถานะ</th>
+                                <th>การตั้งค่า</th>
+                                <th class="text-end"></th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var lot in _lots)
                             {
                                 <tr>
-                                    @if (_editingLotId == lot.Id)
-                                    {
-                                        <td><input class="form-control" @bind="_editLotCode" /></td>
-                                        <td><input class="form-control" @bind="_editLotName" /></td>
-                                        <td>
-                                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                <div class="form-check mb-0">
-                                                    <input class="form-check-input" type="checkbox" id="editAllDay_@lot.Id" @bind="_editLotIsAllDay" />
-                                                    <label class="form-check-label" for="editAllDay_@lot.Id">ตลอดเวลา</label>
-                                                </div>
-                                                @if (!_editLotIsAllDay)
+                                    <td class="fw-semibold">@lot.LotName</td>
+                                    <td>
+                                        @if (lot.IsAllDay)
+                                        {
+                                            <span class="badge bg-info text-dark">ตลอดเวลา</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="small">
+                                                <div>@lot.OpenTime.ToString(@"hh\:mm") – @lot.CloseTime.ToString(@"hh\:mm")</div>
+                                                @if (lot.BillingStartTime.HasValue && lot.BillingEndTime.HasValue)
                                                 {
-                                                    <div class="d-flex flex-column gap-1">
-                                                        <div class="d-flex align-items-center gap-1">
-                                                            <small class="text-muted" style="width:58px">ทำการ</small>
-                                                            <input class="form-control form-control-sm" type="time" style="width:100px" @bind="_editLotOpenTime" />
-                                                            <span>-</span>
-                                                            <input class="form-control form-control-sm" type="time" style="width:100px" @bind="_editLotCloseTime" />
-                                                        </div>
-                                                        <div class="d-flex align-items-center gap-1">
-                                                            <small class="text-muted" style="width:58px">เก็บค่า</small>
-                                                            <input class="form-control form-control-sm" type="time" style="width:100px"
-                                                                   value="@_editLotBillingStart?.ToString("HH:mm")"
-                                                                   @onchange="e => _editLotBillingStart = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
-                                                            <span>-</span>
-                                                            <input class="form-control form-control-sm" type="time" style="width:100px"
-                                                                   value="@_editLotBillingEnd?.ToString("HH:mm")"
-                                                                   @onchange="e => _editLotBillingEnd = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
-                                                        </div>
-                                                    </div>
+                                                    <div class="text-muted">เก็บค่า @lot.BillingStartTime.Value.ToString(@"hh\:mm") – @lot.BillingEndTime.Value.ToString(@"hh\:mm")</div>
                                                 }
                                             </div>
-                                        </td>
-                                        <td>
-                                            <div class="d-flex align-items-center gap-2">
-                                                <div class="form-check mb-0">
-                                                    <input class="form-check-input" type="checkbox" id="editHasOvernight_@lot.Id" @bind="_editLotHasOvernightPenalty" />
-                                                    <label class="form-check-label" for="editHasOvernight_@lot.Id">มี</label>
-                                                </div>
-                                                @if (_editLotHasOvernightPenalty)
-                                                {
-                                                    <input class="form-control form-control-sm" type="number" min="0" step="0.01" style="width:100px" @bind="_editLotOvernightPenaltyAmount" />
-                                                }
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <input class="form-check-input" type="checkbox" @bind="_editLotIsActive" />
-                                        </td>
-                                        <td class="text-end">
-                                            <button class="btn btn-sm btn-success me-2" @onclick="SaveEditAsync">บันทึก</button>
-                                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">ยกเลิก</button>
-                                        </td>
-                                    }
-                                    else
-                                    {
-                                        <td>@lot.LotCode</td>
-                                        <td>@lot.LotName</td>
-                                        <td>
-                                            @if (lot.IsAllDay)
-                                            {
-                                                <span class="badge bg-info text-dark">ตลอดเวลา</span>
-                                            }
-                                            else
-                                            {
-                                                <div>
-                                                    <div><small class="text-muted">ทำการ</small> @lot.OpenTime.ToString(@"hh\:mm") - @lot.CloseTime.ToString(@"hh\:mm")</div>
-                                                    @if (lot.BillingStartTime.HasValue && lot.BillingEndTime.HasValue)
-                                                    {
-                                                        <div><small class="text-muted">เก็บค่า</small> @lot.BillingStartTime.Value.ToString(@"hh\:mm") - @lot.BillingEndTime.Value.ToString(@"hh\:mm")</div>
-                                                    }
-                                                </div>
-                                            }
-                                        </td>
-                                        <td>
-                                            @if (lot.HasOvernightPenalty)
-                                            {
-                                                <span class="badge bg-warning text-dark">@lot.OvernightPenaltyAmount.ToString("N0") ฿</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">-</span>
-                                            }
-                                        </td>
-                                        <td>@(lot.IsActive ? "ใช้งาน" : "ปิดใช้งาน")</td>
-                                        <td class="text-end">
-                                            <a class="btn btn-sm btn-outline-secondary me-2" href="@($"/manage/parking-lot/{lot.Id}/gates")">ประตู</a>
-                                            <a class="btn btn-sm btn-outline-info me-2" href="@($"/manage/parking-lot/{lot.Id}/schedules")">ตารางเวลา</a>
-                                            <a class="btn btn-sm btn-outline-dark me-2" href="@($"/manage/parking-lot/{lot.Id}/rate-rules")">อัตราค่าบริการ</a>
-                                            <button class="btn btn-sm btn-outline-success me-2" @onclick="@(() => OpenConditionModalAsync(lot))">เงื่อนไข</button>
-                                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="@(() => StartEdit(lot))">แก้ไข</button>
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteLotAsync(lot.Id))">ลบ</button>
-                                        </td>
-                                    }
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (lot.HasOvernightPenalty)
+                                        {
+                                            <span class="badge bg-warning text-dark">@lot.OvernightPenaltyAmount.ToString("N0") ฿/คืน</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">ไม่มี</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (lot.IsActive)
+                                        {
+                                            <span class="badge bg-success">ใช้งาน</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">ปิด</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="d-flex gap-1 flex-wrap">
+                                            <a class="btn btn-sm btn-outline-secondary" href="@($"/manage/parking-lot/{lot.Id}/gates")">ประตู</a>
+                                            <a class="btn btn-sm btn-outline-secondary" href="@($"/manage/parking-lot/{lot.Id}/schedules")">ตาราง</a>
+                                            <a class="btn btn-sm btn-outline-secondary" href="@($"/manage/parking-lot/{lot.Id}/rate-rules")">อัตราค่าบริการ</a>
+                                            <button class="btn btn-sm btn-outline-teal" @onclick="@(() => OpenConditionModalAsync(lot))">เงื่อนไข</button>
+                                        </div>
+                                    </td>
+                                    <td class="text-end" style="white-space:nowrap">
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="@(() => OpenEditModal(lot))">แก้ไข</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteLotAsync(lot.Id))">ลบ</button>
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -254,38 +126,144 @@ else
         </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(_errorMessage))
-    {
-        <div class="alert alert-danger mt-3" role="alert">
-            @_errorMessage
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">คัดลอกการตั้งค่าลาน</h5>
+            <p class="text-muted small mb-3">คัดลอกเวลาทำการ ค่าปรับข้ามคืน ตารางเวลา และอัตราค่าบริการทั้งหมดจากลานต้นทางไปยังลานปลายทาง (ข้อมูลเดิมของลานปลายทางจะถูกแทนที่)</p>
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-5">
+                    <label class="form-label">ลานต้นทาง</label>
+                    <select class="form-select" @bind="_copySourceLotId">
+                        <option value="">-- เลือกลานต้นทาง --</option>
+                        @foreach (var lot in _lots)
+                        {
+                            <option value="@lot.Id">@lot.LotName</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-sm-5">
+                    <label class="form-label">ลานปลายทาง</label>
+                    <select class="form-select" @bind="_copyTargetLotId">
+                        <option value="">-- เลือกลานปลายทาง --</option>
+                        @foreach (var lot in _lots)
+                        {
+                            <option value="@lot.Id">@lot.LotName</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-sm-2">
+                    <button class="btn btn-outline-secondary w-100"
+                            @onclick="CopyLotAsync"
+                            disabled="@(string.IsNullOrWhiteSpace(_copySourceLotId) || string.IsNullOrWhiteSpace(_copyTargetLotId))">
+                        คัดลอก
+                    </button>
+                </div>
+            </div>
         </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(_successMessage))
-    {
-        <div class="alert alert-success mt-3" role="alert">
-            @_successMessage
-        </div>
-    }
+    </div>
 }
 
-@if (_conditionModalLotId.HasValue)
+@* ── Add / Edit Modal ── *@
+@if (_showLotModal)
 {
-    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">ผูกเงื่อนไขจอดรถ — @_conditionModalLotName</h5>
+                    <h5 class="modal-title">@(_editingLotId.HasValue ? "แก้ไขลานจอดรถ" : "เพิ่มลานจอดรถ")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">ชื่อลาน <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_formLotName" placeholder="ชื่อเต็มของลาน" />
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="formAllDay" @bind="_formIsAllDay" />
+                                <label class="form-check-label" for="formAllDay">เปิดตลอดเวลา (24 ชม.)</label>
+                            </div>
+                        </div>
+
+                        @if (!_formIsAllDay)
+                        {
+                            <div class="col-6">
+                                <label class="form-label">เวลาเปิด</label>
+                                <input class="form-control" type="time" lang="en-GB" @bind="_formOpenTime" @bind:format="HH:mm" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">เวลาปิด</label>
+                                <input class="form-control" type="time" lang="en-GB" @bind="_formCloseTime" @bind:format="HH:mm" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">เริ่มเก็บค่า <span class="text-muted small">(ไม่บังคับ)</span></label>
+                                <input class="form-control" type="time" lang="en-GB"
+                                       value="@_formBillingStart?.ToString("HH:mm")"
+                                       @onchange="e => _formBillingStart = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">สิ้นสุดเก็บค่า</label>
+                                <input class="form-control" type="time" lang="en-GB"
+                                       value="@_formBillingEnd?.ToString("HH:mm")"
+                                       @onchange="e => _formBillingEnd = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
+                            </div>
+                        }
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="formHasOvernight" @bind="_formHasOvernightPenalty" />
+                                <label class="form-check-label" for="formHasOvernight">มีค่าปรับข้ามคืน</label>
+                            </div>
+                        </div>
+
+                        @if (_formHasOvernightPenalty)
+                        {
+                            <div class="col-6">
+                                <label class="form-label">จำนวนเงิน (บาท/คืน)</label>
+                                <input class="form-control" type="number" min="0" step="0.01" @bind="_formOvernightPenaltyAmount" />
+                            </div>
+                        }
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="formIsActive" @bind="_formIsActive" />
+                                <label class="form-check-label" for="formIsActive">เปิดใช้งาน</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">ยกเลิก</button>
+                    <button class="btn btn-primary" @onclick="SaveModalAsync">
+                        @(_editingLotId.HasValue ? "บันทึกการแก้ไข" : "เพิ่มลาน")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Condition Modal ── *@
+@if (_conditionModalLotId.HasValue)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">เงื่อนไขจอดรถ — @_conditionModalLotName</h5>
                     <button type="button" class="btn-close" @onclick="CloseConditionModal"></button>
                 </div>
                 <div class="modal-body">
                     @if (_conditionModalConditions.Count == 0)
                     {
-                        <p class="text-muted">ไม่มีเงื่อนไขที่ต้องผูกกับลาน (ทุกเงื่อนไขใช้ได้ทุกลานอยู่แล้ว)</p>
+                        <p class="text-muted mb-0">ไม่มีเงื่อนไขที่ใช้งานอยู่ในระบบ</p>
                     }
                     else
                     {
-                        <p class="text-muted small mb-2">เลือกเงื่อนไขที่ใช้ได้กับลานนี้ (เฉพาะที่ตั้งค่า "ไม่ใช้ได้ทุกลาน")</p>
                         @foreach (var cond in _conditionModalConditions)
                         {
                             var condId = cond.Id;
@@ -313,188 +291,136 @@ else
 @code {
     private readonly List<ParkingLot> _lots = [];
     private bool _isLoading = true;
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
 
-    private string _newLotCode = string.Empty;
-    private string _newLotName = string.Empty;
-    private bool _newLotIsAllDay = true;
-    private TimeOnly _newLotOpenTime = new(6, 0);
-    private TimeOnly _newLotCloseTime = new(22, 0);
-    private TimeOnly? _newLotBillingStart;
-    private TimeOnly? _newLotBillingEnd;
-    private bool _newLotHasOvernightPenalty;
-    private decimal _newLotOvernightPenaltyAmount;
-    private bool _newLotIsActive = true;
-
+    // ── Lot Modal ──
+    private bool _showLotModal;
     private Guid? _editingLotId;
-    private string _editLotCode = string.Empty;
-    private string _editLotName = string.Empty;
-    private bool _editLotIsAllDay = true;
-    private TimeOnly _editLotOpenTime = new(6, 0);
-    private TimeOnly _editLotCloseTime = new(22, 0);
-    private TimeOnly? _editLotBillingStart;
-    private TimeOnly? _editLotBillingEnd;
-    private bool _editLotHasOvernightPenalty;
-    private decimal _editLotOvernightPenaltyAmount;
-    private bool _editLotIsActive;
+    private string _formLotName = string.Empty;
+    private bool _formIsAllDay = true;
+    private TimeOnly _formOpenTime = new(6, 0);
+    private TimeOnly _formCloseTime = new(22, 0);
+    private TimeOnly? _formBillingStart;
+    private TimeOnly? _formBillingEnd;
+    private bool _formHasOvernightPenalty;
+    private decimal _formOvernightPenaltyAmount;
+    private bool _formIsActive = true;
 
+    // ── Copy ──
     private string _copySourceLotId = string.Empty;
     private string _copyTargetLotId = string.Empty;
 
+    // ── Condition Modal ──
     private Guid? _conditionModalLotId;
     private string _conditionModalLotName = string.Empty;
     private List<ParkingCondition> _conditionModalConditions = [];
     private HashSet<Guid> _conditionSelectedIds = [];
 
-    private string _errorMessage = string.Empty;
-    private string _successMessage = string.Empty;
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadLotsAsync();
-    }
+    protected override async Task OnInitializedAsync() => await LoadLotsAsync();
 
     private async Task LoadLotsAsync()
     {
-        if (!CurrentUserContext.IsAdmin)
-        {
-            _isLoading = false;
-            return;
-        }
+        if (!CurrentUserContext.IsAdmin) { _isLoading = false; return; }
 
         _isLoading = true;
-        _errorMessage = string.Empty;
-
         try
         {
             var lots = await ParkingLotService.GetAllAsync();
             _lots.Clear();
             _lots.AddRange(lots);
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _isLoading = false; }
     }
 
-    private async Task AddLotAsync()
+    // ── Modal helpers ──
+
+    private void OpenAddModal()
     {
         ClearMessages();
-
-        if (!ValidateLot(_newLotCode, _newLotName))
-        {
-            return;
-        }
-
-        try
-        {
-            await ParkingLotService.CreateAsync(new ParkingLot
-            {
-                LotCode = _newLotCode,
-                LotName = _newLotName,
-                IsAllDay = _newLotIsAllDay,
-                OpenTime = _newLotOpenTime.ToTimeSpan(),
-                CloseTime = _newLotCloseTime.ToTimeSpan(),
-                BillingStartTime = _newLotBillingStart?.ToTimeSpan(),
-                BillingEndTime = _newLotBillingEnd?.ToTimeSpan(),
-                HasOvernightPenalty = _newLotHasOvernightPenalty,
-                OvernightPenaltyAmount = _newLotOvernightPenaltyAmount,
-                IsActive = _newLotIsActive
-            });
-
-            _newLotCode = string.Empty;
-            _newLotName = string.Empty;
-            _newLotIsAllDay = true;
-            _newLotOpenTime = new(6, 0);
-            _newLotCloseTime = new(22, 0);
-            _newLotBillingStart = null;
-            _newLotBillingEnd = null;
-            _newLotHasOvernightPenalty = false;
-            _newLotOvernightPenaltyAmount = 0;
-            _newLotIsActive = true;
-            _successMessage = "เพิ่มลานจอดรถสำเร็จ";
-
-            await LoadLotsAsync();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
+        _editingLotId = null;
+        _formLotName = string.Empty;
+        _formIsAllDay = true;
+        _formOpenTime = new(6, 0);
+        _formCloseTime = new(22, 0);
+        _formBillingStart = null;
+        _formBillingEnd = null;
+        _formHasOvernightPenalty = false;
+        _formOvernightPenaltyAmount = 0;
+        _formIsActive = true;
+        _showLotModal = true;
     }
 
-    private void StartEdit(ParkingLot lot)
+    private void OpenEditModal(ParkingLot lot)
     {
         ClearMessages();
         _editingLotId = lot.Id;
-        _editLotCode = lot.LotCode;
-        _editLotName = lot.LotName;
-        _editLotIsAllDay = lot.IsAllDay;
-        _editLotOpenTime = TimeOnly.FromTimeSpan(lot.OpenTime);
-        _editLotCloseTime = TimeOnly.FromTimeSpan(lot.CloseTime);
-        _editLotBillingStart = lot.BillingStartTime.HasValue ? TimeOnly.FromTimeSpan(lot.BillingStartTime.Value) : null;
-        _editLotBillingEnd = lot.BillingEndTime.HasValue ? TimeOnly.FromTimeSpan(lot.BillingEndTime.Value) : null;
-        _editLotHasOvernightPenalty = lot.HasOvernightPenalty;
-        _editLotOvernightPenaltyAmount = lot.OvernightPenaltyAmount;
-        _editLotIsActive = lot.IsActive;
+        _formLotName = lot.LotName;
+        _formIsAllDay = lot.IsAllDay;
+        _formOpenTime = TimeOnly.FromTimeSpan(lot.OpenTime);
+        _formCloseTime = TimeOnly.FromTimeSpan(lot.CloseTime);
+        _formBillingStart = lot.BillingStartTime.HasValue ? TimeOnly.FromTimeSpan(lot.BillingStartTime.Value) : null;
+        _formBillingEnd = lot.BillingEndTime.HasValue ? TimeOnly.FromTimeSpan(lot.BillingEndTime.Value) : null;
+        _formHasOvernightPenalty = lot.HasOvernightPenalty;
+        _formOvernightPenaltyAmount = lot.OvernightPenaltyAmount;
+        _formIsActive = lot.IsActive;
+        _showLotModal = true;
     }
 
-    private void CancelEdit()
-    {
-        _editingLotId = null;
-        _editLotCode = string.Empty;
-        _editLotName = string.Empty;
-        _editLotIsAllDay = true;
-        _editLotOpenTime = new(6, 0);
-        _editLotCloseTime = new(22, 0);
-        _editLotBillingStart = null;
-        _editLotBillingEnd = null;
-        _editLotHasOvernightPenalty = false;
-        _editLotOvernightPenaltyAmount = 0;
-        _editLotIsActive = false;
-    }
+    private void CloseModal() => _showLotModal = false;
 
-    private async Task SaveEditAsync()
+    private async Task SaveModalAsync()
     {
         ClearMessages();
 
-        if (_editingLotId is null)
-        {
-            return;
-        }
-
-        if (!ValidateLot(_editLotCode, _editLotName))
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(_formLotName)) { _errorMessage = "กรุณากรอกชื่อลาน"; return; }
 
         try
         {
-            await ParkingLotService.UpdateAsync(new ParkingLot
+            var entity = new ParkingLot
             {
-                Id = _editingLotId.Value,
-                LotCode = _editLotCode,
-                LotName = _editLotName,
-                IsAllDay = _editLotIsAllDay,
-                OpenTime = _editLotOpenTime.ToTimeSpan(),
-                CloseTime = _editLotCloseTime.ToTimeSpan(),
-                BillingStartTime = _editLotBillingStart?.ToTimeSpan(),
-                BillingEndTime = _editLotBillingEnd?.ToTimeSpan(),
-                HasOvernightPenalty = _editLotHasOvernightPenalty,
-                OvernightPenaltyAmount = _editLotOvernightPenaltyAmount,
-                IsActive = _editLotIsActive
-            });
+                Id = _editingLotId ?? Guid.Empty,
+                LotName = _formLotName.Trim(),
+                IsAllDay = _formIsAllDay,
+                OpenTime = _formOpenTime.ToTimeSpan(),
+                CloseTime = _formCloseTime.ToTimeSpan(),
+                BillingStartTime = _formBillingStart?.ToTimeSpan(),
+                BillingEndTime = _formBillingEnd?.ToTimeSpan(),
+                HasOvernightPenalty = _formHasOvernightPenalty,
+                OvernightPenaltyAmount = _formOvernightPenaltyAmount,
+                IsActive = _formIsActive
+            };
 
-            _successMessage = "แก้ไขลานจอดรถสำเร็จ";
-            CancelEdit();
+            if (_editingLotId.HasValue)
+            {
+                await ParkingLotService.UpdateAsync(entity);
+                _successMessage = "แก้ไขลานจอดรถสำเร็จ";
+            }
+            else
+            {
+                await ParkingLotService.CreateAsync(entity);
+                _successMessage = "เพิ่มลานจอดรถสำเร็จ";
+            }
+
+            CloseModal();
             await LoadLotsAsync();
         }
-        catch (Exception ex)
+        catch (Exception ex) { _errorMessage = ex.Message; }
+    }
+
+    // ── Delete / Copy ──
+
+    private async Task DeleteLotAsync(Guid id)
+    {
+        ClearMessages();
+        try
         {
-            _errorMessage = ex.Message;
+            await ParkingLotService.DeleteAsync(id);
+            _successMessage = "ลบลานจอดรถสำเร็จ";
+            await LoadLotsAsync();
         }
+        catch (Exception ex) { _errorMessage = ex.Message; }
     }
 
     private async Task CopyLotAsync()
@@ -507,11 +433,7 @@ else
             return;
         }
 
-        if (sourceId == targetId)
-        {
-            _errorMessage = "ต้นทางและปลายทางต้องไม่ใช่ลานเดียวกัน";
-            return;
-        }
+        if (sourceId == targetId) { _errorMessage = "ต้นทางและปลายทางต้องไม่ใช่ลานเดียวกัน"; return; }
 
         try
         {
@@ -521,50 +443,16 @@ else
             _successMessage = "คัดลอกการตั้งค่าลานสำเร็จ";
             await LoadLotsAsync();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
     }
 
-    private async Task DeleteLotAsync(Guid id)
-    {
-        ClearMessages();
-
-        try
-        {
-            await ParkingLotService.DeleteAsync(id);
-            _successMessage = "ลบลานจอดรถสำเร็จ";
-            await LoadLotsAsync();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-    }
-
-    private bool ValidateLot(string lotCode, string lotName)
-    {
-        if (string.IsNullOrWhiteSpace(lotCode))
-        {
-            _errorMessage = "กรุณากรอกรหัสลาน";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(lotName))
-        {
-            _errorMessage = "กรุณากรอกชื่อลาน";
-            return false;
-        }
-
-        return true;
-    }
+    // ── Condition Modal ──
 
     private async Task OpenConditionModalAsync(ParkingLot lot)
     {
         ClearMessages();
         _conditionModalLotId = lot.Id;
-        _conditionModalLotName = lot.LotCode;
+        _conditionModalLotName = lot.LotName;
         var all = await ParkingConditionService.GetAllAsync();
         _conditionModalConditions = all.Where(c => c.IsActive).ToList();
         _conditionSelectedIds = await ParkingConditionService.GetLinkedConditionIdsAsync(lot.Id);
@@ -593,10 +481,7 @@ else
             _successMessage = "บันทึกเงื่อนไขสำเร็จ";
             CloseConditionModal();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
     }
 
     private static string GetTypeName(ParkingConditionType type) => type switch

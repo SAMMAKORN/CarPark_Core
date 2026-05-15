@@ -6,7 +6,7 @@
 @if (!DatabaseHealthService.IsConnected)
 {
     <div class="db-offline-banner">
-        <span>⚠️ ไม่สามารถเชื่อมต่อฐานข้อมูลได้ — ระบบอาจทำงานไม่ถูกต้อง กรุณาตรวจสอบการเชื่อมต่อ</span>
+        <span>ไม่สามารถเชื่อมต่อฐานข้อมูลได้ — ระบบอาจทำงานไม่ถูกต้อง กรุณาตรวจสอบการเชื่อมต่อ</span>
     </div>
 }
 
@@ -22,7 +22,21 @@
         @if (CurrentUserContext.IsAuthenticated)
         {
             <div class="top-row app-top px-4">
-                <div class="top-row-title">ศูนย์ควบคุมการจอดรถ</div>
+                <div class="top-row-left">
+                    <div class="top-row-title">ศูนย์ควบคุมการจอดรถ</div>
+                </div>
+                @if (CurrentUserContext.CurrentParkingLot is not null)
+                {
+                    <div class="top-row-lot">
+                        <span class="top-lot-dot"></span>
+                        <span class="top-lot-name">@CurrentUserContext.CurrentParkingLot.LotName</span>
+                        @if (CurrentUserContext.CurrentGate is not null)
+                        {
+                            <span class="top-lot-sep">·</span>
+                            <span class="top-lot-gate">@CurrentUserContext.CurrentGate.GateName</span>
+                        }
+                    </div>
+                }
             </div>
         }
 

@@ -25,7 +25,6 @@ namespace CarPark.Services
 
             var entity = new ParkingLot
             {
-                LotCode = lot.LotCode.Trim(),
                 LotName = lot.LotName.Trim(),
                 IsAllDay = lot.IsAllDay,
                 OpenTime = lot.OpenTime,
@@ -50,7 +49,6 @@ namespace CarPark.Services
             var existing = await db.ParkingLots.FirstOrDefaultAsync(x => x.Id == lot.Id, cancellationToken)
                 ?? throw new InvalidOperationException("ไม่พบลานจอดรถ");
 
-            existing.LotCode = lot.LotCode.Trim();
             existing.LotName = lot.LotName.Trim();
             existing.IsAllDay = lot.IsAllDay;
             existing.OpenTime = lot.OpenTime;

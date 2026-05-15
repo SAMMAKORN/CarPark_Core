@@ -16,7 +16,7 @@ namespace CarPark.Services
             return await db.ParkingLots
                 .AsNoTracking()
                 .Where(x => x.IsActive)
-                .OrderBy(x => x.LotCode)
+                .OrderBy(x => x.LotName)
                 .ToListAsync(cancellationToken);
         }
 
@@ -54,6 +54,7 @@ namespace CarPark.Services
                 .Include(x => x.ParkingLot)
                 .Include(x => x.InGate)
                 .Include(x => x.OutGate)
+                .Include(x => x.ParkingCondition)
                 .Where(x => (x.InAt >= utcStart && x.InAt < utcEnd) || !x.OutAt.HasValue)
                 .OrderByDescending(x => x.InAt)
                 .ToListAsync(cancellationToken);
@@ -108,6 +109,65 @@ namespace CarPark.Services
                          && x.OutAt == null
                          && (!parkingLotId.HasValue || x.ParkingLotId == parkingLotId.Value),
                     cancellationToken);
+        }
+
+        public async Task<List<ParkingCondition>> GetApplicableConditionsAsync(
+            Guid parkingLotId,
+            CancellationToken cancellationToken = default)
+        {
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            return await db.ParkingConditions
+                .AsNoTracking()
+                .Where(x => x.IsActive && x.ConditionLots.Any(cl => cl.ParkingLotId == parkingLotId))
+                .OrderBy(x => x.ConditionName)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task CorrectConditionAsync(
+            Guid transactionId,
+            Guid? conditionId,
+            CancellationToken cancellationToken = default)
+        {
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            var tx = await db.ParkingTransactions
+                .FirstOrDefaultAsync(x => x.Id == transactionId, cancellationToken)
+                ?? throw new InvalidOperationException("ไม่พบรายการจอดรถ");
+
+            if (!tx.OutAt.HasValue)
+                throw new InvalidOperationException("ยังไม่ได้คืนบัตร ไม่สามารถแก้ไขเงื่อนไขได้");
+
+            var lot = await db.ParkingLots.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == tx.ParkingLotId, cancellationToken);
+
+            var schedules = await db.ParkingLotSchedules.AsNoTracking()
+                .Where(x => x.ParkingLotId == tx.ParkingLotId && x.IsActive)
+                .ToListAsync(cancellationToken);
+
+            var inDayBit = ParkingLotScheduleService.DayOfWeekToBit(tx.InAt.ToLocalTime().DayOfWeek);
+            var matchedSchedule = schedules.FirstOrDefault(s => (s.DaysOfWeek & inDayBit) != 0);
+
+            var activeRules = await db.ParkingRateRules.AsNoTracking()
+                .Where(x => x.ParkingLotId == tx.ParkingLotId && x.IsActive)
+                .OrderBy(x => x.Sequence)
+                .ToListAsync(cancellationToken);
+
+            ParkingCondition? condition = null;
+            if (conditionId.HasValue)
+                condition = await db.ParkingConditions.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == conditionId.Value, cancellationToken);
+
+            var charge = CalculateCharge(activeRules, tx.InAt, tx.OutAt.Value, condition, lot, matchedSchedule);
+
+            tx.ParkingConditionId = condition?.Id;
+            tx.TotalMinutes = charge.TotalMinutes;
+            tx.TotalAmount = charge.TotalAmount;
+            tx.IsOvernight = charge.IsOvernight;
+            tx.Remark = condition?.ConditionName;
+            tx.UpdateBy = currentUserContext.CurrentUserId;
+            tx.UpdateAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync(cancellationToken);
         }
 
         public async Task UpdateAsync(

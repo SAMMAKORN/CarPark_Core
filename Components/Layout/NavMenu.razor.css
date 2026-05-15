@@ -47,55 +47,146 @@
 }
 
 .app-nav-list {
-    padding-top: 0.7rem;
+    padding-top: 0.5rem;
+    padding-bottom: 1.5rem;
 }
 
-.user-chip {
-    margin: 0.35rem 0.75rem 1rem;
-    padding: 0.75rem 0.9rem;
-    border-radius: 0.9rem;
+/* ── User card ── */
+.nav-user-card {
+    margin: 0.5rem 0.75rem 0.65rem;
+    padding: 0.65rem 0.9rem;
+    border-radius: 0.85rem;
     background: rgba(225, 250, 239, 0.11);
-    border: 1px solid rgba(225, 250, 239, 0.18);
+    border: 1px solid rgba(225, 250, 239, 0.17);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.user-chip-name {
+.nav-user-name {
     color: #ecfff7;
     font-weight: 600;
-    font-size: 0.92rem;
+    font-size: 0.88rem;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.user-chip-meta {
-    color: rgba(236, 255, 247, 0.75);
-    font-size: 0.75rem;
-    margin-top: 0.15rem;
+.nav-role-badge {
+    flex-shrink: 0;
+    font-size: 0.66rem;
+    font-weight: 700;
+    padding: 0.18em 0.55em;
+    border-radius: 999px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: rgba(49, 174, 182, 0.22);
+    color: #a5f3f7;
+    border: 1px solid rgba(49, 174, 182, 0.32);
+    white-space: nowrap;
 }
 
+    .nav-role-badge.nav-role-admin {
+        background: rgba(224, 156, 63, 0.22);
+        color: #fde68a;
+        border-color: rgba(224, 156, 63, 0.38);
+    }
+
+/* ── Lot / Gate chip ── */
+.nav-lot-chip {
+    margin: 0 0.75rem 0.5rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: 0.8rem;
+    background: rgba(74, 222, 128, 0.07);
+    border: 1px solid rgba(74, 222, 128, 0.18);
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.nav-lot-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
+    flex-shrink: 0;
+}
+
+.nav-lot-body {
+    min-width: 0;
+    flex: 1;
+}
+
+.nav-lot-name {
+    color: #ecfff7;
+    font-size: 0.87rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nav-lot-gate {
+    color: rgba(236, 255, 247, 0.6);
+    font-size: 0.74rem;
+    margin-top: 0.08rem;
+}
+
+/* ── Section labels ── */
+.nav-section-label {
+    padding: 0.65rem 1.35rem 0.18rem;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(225, 250, 239, 0.4);
+}
+
+/* ── Nav items ── */
 .nav-item {
     font-size: 0.92rem;
-    padding-bottom: 0.4rem;
+    padding-bottom: 0.18rem;
 }
 
     .nav-item ::deep .nav-link {
-        color: rgba(237, 255, 248, 0.9);
-        border-radius: 0.75rem;
-        min-height: 2.8rem;
+        color: rgba(237, 255, 248, 0.85);
+        border-radius: 0.72rem;
+        min-height: 2.55rem;
         display: flex;
         align-items: center;
-        padding: 0.5rem 0.9rem;
+        padding: 0.45rem 0.9rem;
         border: 1px solid transparent;
+        transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
     }
 
         .nav-item ::deep .nav-link:hover {
             color: #ffffff;
-            background: rgba(243, 255, 250, 0.12);
-            border-color: rgba(243, 255, 250, 0.16);
+            background: rgba(243, 255, 250, 0.11);
+            border-color: rgba(243, 255, 250, 0.15);
         }
 
     .nav-item ::deep a.active {
         color: #052b31;
         background: linear-gradient(120deg, #c7f7e2, #b9efe6);
-        border-color: rgba(8, 47, 55, 0.2);
+        border-color: rgba(8, 47, 55, 0.18);
         font-weight: 600;
+    }
+
+/* ── Logout button ── */
+.nav-logout-btn {
+    background: transparent !important;
+    border-color: rgba(236, 254, 246, 0.2) !important;
+    color: rgba(236, 254, 246, 0.7) !important;
+    border-radius: 0.72rem !important;
+    transition: background 0.14s ease, color 0.14s ease !important;
+}
+
+    .nav-logout-btn:hover {
+        background: rgba(236, 254, 246, 0.1) !important;
+        color: #ecfff7 !important;
     }
 
 @media (min-width: 641px) {

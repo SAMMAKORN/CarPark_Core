@@ -4,33 +4,73 @@
 <PageTitle>หน้าหลัก</PageTitle>
 
 <div class="view-head">
-    <h1>หน้าหลัก</h1>
-    <p class="view-subtitle">ยินดีต้อนรับสู่ระบบจัดการที่จอดรถ</p>
+    <h1>ยินดีต้อนรับ</h1>
+    <p class="view-subtitle">ระบบจัดการที่จอดรถ</p>
 </div>
 
 @if (!CurrentUserContext.IsAuthenticated)
 {
-    <div class="alert alert-info" role="alert">
-        กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ
+    <div class="alert alert-info">
+        กรุณา <a href="/login" class="alert-link">เข้าสู่ระบบ</a> เพื่อดำเนินการต่อ
     </div>
 }
 else if (CurrentUserContext.IsAdmin)
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">เมนูลัด</h5>
-            <div class="d-flex flex-wrap gap-2">
-                <a class="btn btn-primary" href="/manage/parking-lot">จัดการลานจอดรถ</a>
-                <a class="btn btn-outline-primary" href="/manage/user">จัดการผู้ใช้</a>
-            </div>
+    <div class="row g-3">
+        <div class="col-sm-6 col-lg-3">
+            <a href="/parking-transaction" class="text-decoration-none">
+                <div class="card h-100 border-primary">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary">รายการจอดรถ</h6>
+                        <p class="card-text text-muted small mb-0">บันทึกเข้า-ออก และคำนวณค่าจอด</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a href="/manage/parking-lot" class="text-decoration-none">
+                <div class="card h-100 border-secondary">
+                    <div class="card-body">
+                        <h6 class="card-title text-secondary">จัดการลานจอดรถ</h6>
+                        <p class="card-text text-muted small mb-0">ลาน ประตู ตารางเวลา อัตราค่าบริการ</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a href="/manage/parking-condition" class="text-decoration-none">
+                <div class="card h-100 border-secondary">
+                    <div class="card-body">
+                        <h6 class="card-title text-secondary">เงื่อนไขจอดรถ</h6>
+                        <p class="card-text text-muted small mb-0">สิทธิ์จอดฟรี โควต้า และเงื่อนไขพิเศษ</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <a href="/report/parking-transaction" class="text-decoration-none">
+                <div class="card h-100 border-secondary">
+                    <div class="card-body">
+                        <h6 class="card-title text-secondary">รายงาน</h6>
+                        <p class="card-text text-muted small mb-0">ค้นหาและส่งออกข้อมูลจอดรถ</p>
+                    </div>
+                </div>
+            </a>
         </div>
     </div>
 }
 else
 {
-    <div class="card">
-        <div class="card-body">
-            <p class="mb-0">เข้าสู่ระบบสำเร็จ</p>
+    <div class="row g-3">
+        <div class="col-sm-6 col-lg-4">
+            <a href="/parking-transaction" class="text-decoration-none">
+                <div class="card h-100 border-primary">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary">รายการจอดรถ</h6>
+                        <p class="card-text text-muted small mb-0">บันทึกเข้า-ออก และคำนวณค่าจอด</p>
+                    </div>
+                </div>
+            </a>
         </div>
     </div>
 }

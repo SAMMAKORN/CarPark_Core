@@ -12,125 +12,91 @@
 
 @if (!CurrentUserContext.IsAdmin)
 {
-    <div class="alert alert-danger" role="alert">
-        ไม่มีสิทธิ์เข้าใช้งาน หน้านี้สำหรับผู้ดูแลระบบเท่านั้น
-    </div>
+    <div class="alert alert-danger">ไม่มีสิทธิ์เข้าใช้งาน หน้านี้สำหรับผู้ดูแลระบบเท่านั้น</div>
 }
 else if (!_isLotLoaded)
 {
-    <p>กำลังโหลด...</p>
+    <p class="text-muted">กำลังโหลด...</p>
 }
 else if (_lot is null)
 {
-    <div class="alert alert-danger" role="alert">ไม่พบลานจอดรถ</div>
-    <a class="btn btn-secondary" href="/manage/parking-lot">กลับสู่รายการลานจอดรถ</a>
+    <div class="alert alert-danger">ไม่พบลานจอดรถ</div>
+    <a class="btn btn-secondary" href="/manage/parking-lot">กลับสู่รายการลาน</a>
 }
 else
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="card-title mb-1">@_lot.LotCode - @_lot.LotName</h5>
-                    <small class="text-muted">
-                        เวลาทำการ:
-                        @if (_lot.IsAllDay)
-                        {
-                            <span class="badge bg-info text-dark ms-1">ตลอดเวลา</span>
-                        }
-                        else
-                        {
-                            <span>@_lot.OpenTime.ToString(@"hh\:mm") - @_lot.CloseTime.ToString(@"hh\:mm")</span>
-                        }
-                    </small>
-                </div>
-                <div class="d-flex gap-2">
-                    <a class="btn btn-outline-dark" href="@($"/manage/parking-lot/{ParkingLotId}/rate-rules")">อัตราค่าบริการ</a>
-                    <a class="btn btn-outline-secondary" href="/manage/parking-lot">กลับสู่รายการลานจอดรถ</a>
-                </div>
-            </div>
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible mb-3">
+            @_errorMessage
+            <button type="button" class="btn-close" @onclick="ClearMessages"></button>
         </div>
-    </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success alert-dismissible mb-3">
+            @_successMessage
+            <button type="button" class="btn-close" @onclick="ClearMessages"></button>
+        </div>
+    }
 
     <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">เพิ่มประตู</h5>
-
-            <div class="row g-2 align-items-end">
-                <div class="col-md-6">
-                    <label class="form-label">ชื่อประตู</label>
-                    <input class="form-control" @bind="_newGateName" placeholder="เช่น ประตู A, ประตูหน้า" />
-                </div>
-                <div class="col-md-2">
-                    <div class="form-check mt-4">
-                        <input class="form-check-input" type="checkbox" id="newActive" @bind="_newIsActive" />
-                        <label class="form-check-label" for="newActive">ใช้งาน</label>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <button class="btn btn-primary w-100" @onclick="AddGateAsync">เพิ่มประตู</button>
-                </div>
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="card-title mb-1">@_lot.LotName</h5>
+                <small class="text-muted">
+                    @if (_lot.IsAllDay) { <span class="badge bg-info text-dark">ตลอดเวลา</span> }
+                    else { <span>@_lot.OpenTime.ToString(@"hh\:mm") – @_lot.CloseTime.ToString(@"hh\:mm")</span> }
+                </small>
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-dark btn-sm" href="@($"/manage/parking-lot/{ParkingLotId}/rate-rules")">อัตราค่าบริการ</a>
+                <a class="btn btn-outline-secondary btn-sm" href="/manage/parking-lot">รายการลาน</a>
             </div>
         </div>
     </div>
 
     <div class="card">
         <div class="card-body">
-            <h5 class="card-title">รายการประตู</h5>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title mb-0">รายการประตู</h5>
+                <button class="btn btn-primary" @onclick="OpenAddModal">+ เพิ่มประตู</button>
+            </div>
 
             @if (_isLoading)
             {
-                <p>กำลังโหลด...</p>
+                <p class="text-muted">กำลังโหลด...</p>
             }
             else if (_gates.Count == 0)
             {
-                <p class="text-muted">ยังไม่มีประตูสำหรับลานจอดรถนี้</p>
+                <p class="text-muted">ยังไม่มีประตู กดปุ่ม "เพิ่มประตู" เพื่อเริ่มต้น</p>
             }
             else
             {
                 <div class="table-responsive">
-                    <table class="table table-striped align-middle">
-                        <thead>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
                             <tr>
                                 <th>ชื่อประตู</th>
-                                <th>ใช้งาน</th>
-                                <th class="text-end">จัดการ</th>
+                                <th>สถานะ</th>
+                                <th class="text-end"></th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var gate in _gates)
                             {
-                                @if (_editingGateId == gate.Id)
-                                {
-                                    <tr class="table-warning">
-                                        <td><input class="form-control" @bind="_editGateName" /></td>
-                                        <td><input class="form-check-input" type="checkbox" @bind="_editIsActive" /></td>
-                                        <td class="text-end">
-                                            <button class="btn btn-sm btn-success me-2" @onclick="SaveEditAsync">บันทึก</button>
-                                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">ยกเลิก</button>
-                                        </td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td>@gate.GateName</td>
-                                        <td>
-                                            @if (gate.IsActive)
-                                            {
-                                                <span class="badge bg-success">ใช้งาน</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge bg-secondary">ปิดใช้งาน</span>
-                                            }
-                                        </td>
-                                        <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="@(() => StartEdit(gate))">แก้ไข</button>
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteGateAsync(gate.Id))">ลบ</button>
-                                        </td>
-                                    </tr>
-                                }
+                                <tr>
+                                    <td class="fw-semibold">@gate.GateName</td>
+                                    <td>
+                                        <span class="badge @(gate.IsActive ? "bg-success" : "bg-secondary")">
+                                            @(gate.IsActive ? "ใช้งาน" : "ปิด")
+                                        </span>
+                                    </td>
+                                    <td class="text-end" style="white-space:nowrap">
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="@(() => OpenEditModal(gate))">แก้ไข</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteGateAsync(gate.Id))">ลบ</button>
+                                    </td>
+                                </tr>
                             }
                         </tbody>
                     </table>
@@ -138,178 +104,149 @@ else
             }
         </div>
     </div>
+}
 
-    @if (!string.IsNullOrWhiteSpace(_errorMessage))
-    {
-        <div class="alert alert-danger mt-3" role="alert">@_errorMessage</div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(_successMessage))
-    {
-        <div class="alert alert-success mt-3" role="alert">@_successMessage</div>
-    }
+@if (_showModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingId.HasValue ? "แก้ไขประตู" : "เพิ่มประตู")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">ชื่อประตู <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="_formGateName" placeholder="เช่น ประตู A, ประตูหน้า" />
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="formActive" @bind="_formIsActive" />
+                        <label class="form-check-label" for="formActive">เปิดใช้งาน</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">ยกเลิก</button>
+                    <button class="btn btn-primary" @onclick="SaveModalAsync">
+                        @(_editingId.HasValue ? "บันทึกการแก้ไข" : "เพิ่มประตู")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
-    [Parameter]
-    public Guid ParkingLotId { get; set; }
+    [Parameter] public Guid ParkingLotId { get; set; }
 
     private ParkingLot? _lot;
     private readonly List<ParkingGate> _gates = [];
     private bool _isLoading = true;
     private bool _isLotLoaded;
-
-    private string _newGateName = string.Empty;
-    private bool _newIsActive = true;
-
-    private Guid? _editingGateId;
-    private string _editGateName = string.Empty;
-    private bool _editIsActive = true;
-
     private string _errorMessage = string.Empty;
     private string _successMessage = string.Empty;
 
-    protected override async Task OnParametersSetAsync()
-    {
-        await LoadAsync();
-    }
+    private bool _showModal;
+    private Guid? _editingId;
+    private string _formGateName = string.Empty;
+    private bool _formIsActive = true;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
-        if (!CurrentUserContext.IsAdmin)
-        {
-            _isLotLoaded = true;
-            _isLoading = false;
-            return;
-        }
-
+        if (!CurrentUserContext.IsAdmin) { _isLotLoaded = true; _isLoading = false; return; }
         ClearMessages();
-        _isLoading = true;
-        _isLotLoaded = false;
-
+        _isLoading = true; _isLotLoaded = false;
         try
         {
             var lots = await ParkingLotService.GetAllAsync();
             _lot = lots.FirstOrDefault(x => x.Id == ParkingLotId);
             _isLotLoaded = true;
-
-            if (_lot is not null)
-            {
-                await LoadGatesAsync();
-            }
+            if (_lot is not null) await LoadGatesAsync();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-            _isLotLoaded = true;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; _isLotLoaded = true; }
+        finally { _isLoading = false; }
     }
 
     private async Task LoadGatesAsync()
     {
         _isLoading = true;
-
         try
         {
             var gates = await ParkingGateService.GetByLotIdAsync(ParkingLotId);
             _gates.Clear();
             _gates.AddRange(gates);
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _isLoading = false; }
     }
 
-    private async Task AddGateAsync()
+    private void OpenAddModal()
     {
         ClearMessages();
+        _editingId = null;
+        _formGateName = string.Empty;
+        _formIsActive = true;
+        _showModal = true;
+    }
 
+    private void OpenEditModal(ParkingGate gate)
+    {
+        ClearMessages();
+        _editingId = gate.Id;
+        _formGateName = gate.GateName;
+        _formIsActive = gate.IsActive;
+        _showModal = true;
+    }
+
+    private void CloseModal() => _showModal = false;
+
+    private async Task SaveModalAsync()
+    {
+        ClearMessages();
+        if (string.IsNullOrWhiteSpace(_formGateName)) { _errorMessage = "กรุณากรอกชื่อประตู"; return; }
         try
         {
-            await ParkingGateService.CreateAsync(new ParkingGate
+            if (_editingId.HasValue)
             {
-                ParkingLotId = ParkingLotId,
-                GateName = _newGateName,
-                IsActive = _newIsActive
-            });
-
-            _newGateName = string.Empty;
-            _newIsActive = true;
-            _successMessage = "เพิ่มประตูสำเร็จ";
+                await ParkingGateService.UpdateAsync(new ParkingGate
+                {
+                    Id = _editingId.Value,
+                    ParkingLotId = ParkingLotId,
+                    GateName = _formGateName.Trim(),
+                    IsActive = _formIsActive
+                });
+                _successMessage = "แก้ไขประตูสำเร็จ";
+            }
+            else
+            {
+                await ParkingGateService.CreateAsync(new ParkingGate
+                {
+                    ParkingLotId = ParkingLotId,
+                    GateName = _formGateName.Trim(),
+                    IsActive = _formIsActive
+                });
+                _successMessage = "เพิ่มประตูสำเร็จ";
+            }
+            CloseModal();
             await LoadGatesAsync();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-    }
-
-    private void StartEdit(ParkingGate gate)
-    {
-        ClearMessages();
-        _editingGateId = gate.Id;
-        _editGateName = gate.GateName;
-        _editIsActive = gate.IsActive;
-    }
-
-    private void CancelEdit()
-    {
-        _editingGateId = null;
-    }
-
-    private async Task SaveEditAsync()
-    {
-        if (_editingGateId is null) return;
-        ClearMessages();
-
-        try
-        {
-            await ParkingGateService.UpdateAsync(new ParkingGate
-            {
-                Id = _editingGateId.Value,
-                ParkingLotId = ParkingLotId,
-                GateName = _editGateName,
-                IsActive = _editIsActive
-            });
-
-            _successMessage = "แก้ไขประตูสำเร็จ";
-            CancelEdit();
-            await LoadGatesAsync();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
     }
 
     private async Task DeleteGateAsync(Guid id)
     {
         ClearMessages();
-
         try
         {
             await ParkingGateService.DeleteAsync(id);
             _successMessage = "ลบประตูสำเร็จ";
             await LoadGatesAsync();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
     }
 
-    private void ClearMessages()
-    {
-        _errorMessage = string.Empty;
-        _successMessage = string.Empty;
-    }
+    private void ClearMessages() { _errorMessage = string.Empty; _successMessage = string.Empty; }
 }

@@ -11,104 +11,70 @@
 
 @if (!CurrentUserContext.IsAdmin)
 {
-    <div class="alert alert-danger" role="alert">
-        ไม่มีสิทธิ์เข้าใช้งาน หน้านี้สำหรับผู้ดูแลระบบเท่านั้น
-    </div>
+    <div class="alert alert-danger">ไม่มีสิทธิ์เข้าใช้งาน หน้านี้สำหรับผู้ดูแลระบบเท่านั้น</div>
 }
 else
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">เพิ่มผู้ใช้</h5>
-
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <label class="form-label">ชื่อผู้ใช้</label>
-                    <input class="form-control" @bind="_newUsername" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">ชื่อ-นามสกุล</label>
-                    <input class="form-control" @bind="_newName" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">รหัสผ่าน</label>
-                    <input class="form-control" type="password" @bind="_newPassword" />
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">บทบาท</label>
-                    <select class="form-select" @bind="_newRole">
-                        @foreach (var role in _roles)
-                        {
-                            <option value="@role">@role</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-1 d-flex align-items-end">
-                    <button class="btn btn-primary w-100" @onclick="AddUserAsync">เพิ่ม</button>
-                </div>
-            </div>
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible mb-3">
+            @_errorMessage
+            <button type="button" class="btn-close" @onclick="ClearMessages"></button>
         </div>
-    </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success alert-dismissible mb-3">
+            @_successMessage
+            <button type="button" class="btn-close" @onclick="ClearMessages"></button>
+        </div>
+    }
 
     <div class="card">
         <div class="card-body">
-            <h5 class="card-title">รายการผู้ใช้</h5>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title mb-0">รายการผู้ใช้</h5>
+                <button class="btn btn-primary" @onclick="OpenAddModal">+ เพิ่มผู้ใช้</button>
+            </div>
 
             @if (_isLoading)
             {
-                <p>กำลังโหลด...</p>
+                <p class="text-muted">กำลังโหลด...</p>
             }
             else if (_users.Count == 0)
             {
-                <p>ไม่พบรายการผู้ใช้</p>
+                <p class="text-muted">ยังไม่มีผู้ใช้</p>
             }
             else
             {
                 <div class="table-responsive">
-                    <table class="table table-striped align-middle">
-                        <thead>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
                             <tr>
                                 <th>ชื่อผู้ใช้</th>
                                 <th>ชื่อ-นามสกุล</th>
                                 <th>บทบาท</th>
-                                <th class="text-end">จัดการ</th>
+                                <th class="text-end"></th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var user in _users)
                             {
                                 <tr>
-                                    @if (_editingUserId == user.Id)
-                                    {
-                                        <td><input class="form-control" @bind="_editUsername" /></td>
-                                        <td><input class="form-control" @bind="_editName" /></td>
-                                        <td>
-                                            <select class="form-select" @bind="_editRole">
-                                                @foreach (var role in _roles)
-                                                {
-                                                    <option value="@role">@role</option>
-                                                }
-                                            </select>
-                                        </td>
-                                        <td class="text-end">
-                                            <input class="form-control mb-2" type="password" placeholder="รหัสผ่านใหม่ (ไม่บังคับ)" @bind="_editPassword" />
-                                            <button class="btn btn-sm btn-success me-2" @onclick="SaveEditAsync">บันทึก</button>
-                                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">ยกเลิก</button>
-                                        </td>
-                                    }
-                                    else
-                                    {
-                                        <td>@user.Username</td>
-                                        <td>@user.Name</td>
-                                        <td>@user.Role</td>
-                                        <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="@(() => StartEdit(user))">แก้ไข</button>
-                                            @if (user.Id != CurrentUserContext.CurrentUserId)
-                                            {
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteUserAsync(user.Id))">ลบ</button>
-                                            }
-                                        </td>
-                                    }
+                                    <td class="fw-semibold">@user.Username</td>
+                                    <td>@user.Name</td>
+                                    <td>
+                                        <span class="badge @(user.Role == Role.Admin ? "bg-danger" : "bg-secondary")">
+                                            @user.Role
+                                        </span>
+                                    </td>
+                                    <td class="text-end" style="white-space:nowrap">
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="@(() => OpenEditModal(user))">แก้ไข</button>
+                                        @if (user.Id != CurrentUserContext.CurrentUserId)
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteUserAsync(user.Id))">ลบ</button>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -117,180 +83,172 @@ else
             }
         </div>
     </div>
+}
 
-    @if (!string.IsNullOrWhiteSpace(_errorMessage))
-    {
-        <div class="alert alert-danger mt-3" role="alert">
-            @_errorMessage
+@if (_showModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingId.HasValue ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label">ชื่อผู้ใช้ <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_formUsername" placeholder="username" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">บทบาท</label>
+                            <select class="form-select" @bind="_formRole">
+                                @foreach (var role in _roles)
+                                {
+                                    <option value="@role">@role</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">ชื่อ-นามสกุล <span class="text-danger">*</span></label>
+                            <input class="form-control" @bind="_formName" placeholder="ชื่อเต็ม" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">
+                                รหัสผ่าน
+                                @if (_editingId.HasValue)
+                                {
+                                    <span class="text-muted small ms-1">(เว้นว่างไว้หากไม่ต้องการเปลี่ยน)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-danger">*</span>
+                                }
+                            </label>
+                            <input class="form-control" type="password" @bind="_formPassword"
+                                   placeholder="@(_editingId.HasValue ? "รหัสผ่านใหม่ (ไม่บังคับ)" : "รหัสผ่าน")" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">ยกเลิก</button>
+                    <button class="btn btn-primary" @onclick="SaveModalAsync">
+                        @(_editingId.HasValue ? "บันทึกการแก้ไข" : "เพิ่มผู้ใช้")
+                    </button>
+                </div>
+            </div>
         </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(_successMessage))
-    {
-        <div class="alert alert-success mt-3" role="alert">
-            @_successMessage
-        </div>
-    }
+    </div>
 }
 
 @code {
     private readonly List<User> _users = [];
     private readonly Role[] _roles = Enum.GetValues<Role>();
-
     private bool _isLoading = true;
     private string _errorMessage = string.Empty;
     private string _successMessage = string.Empty;
 
-    private string _newUsername = string.Empty;
-    private string _newName = string.Empty;
-    private string _newPassword = string.Empty;
-    private Role _newRole = Role.User;
+    private bool _showModal;
+    private Guid? _editingId;
+    private string _formUsername = string.Empty;
+    private string _formName = string.Empty;
+    private string _formPassword = string.Empty;
+    private Role _formRole = Role.User;
 
-    private Guid? _editingUserId;
-    private string _editUsername = string.Empty;
-    private string _editName = string.Empty;
-    private string _editPassword = string.Empty;
-    private Role _editRole = Role.User;
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadUsersAsync();
-    }
+    protected override async Task OnInitializedAsync() => await LoadUsersAsync();
 
     private async Task LoadUsersAsync()
     {
-        if (!CurrentUserContext.IsAdmin)
-        {
-            _isLoading = false;
-            return;
-        }
-
+        if (!CurrentUserContext.IsAdmin) { _isLoading = false; return; }
         _isLoading = true;
-        _errorMessage = string.Empty;
-
         try
         {
             _users.Clear();
             _users.AddRange(await UserService.GetAllAsync());
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
+        finally { _isLoading = false; }
     }
 
-    private async Task AddUserAsync()
+    private void OpenAddModal()
     {
         ClearMessages();
-
-        if (string.IsNullOrWhiteSpace(_newUsername) || string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(_newPassword))
-        {
-            _errorMessage = "กรุณากรอกชื่อผู้ใช้ ชื่อ-นามสกุล และรหัสผ่าน";
-            return;
-        }
-
-        try
-        {
-            await UserService.CreateAsync(new User
-            {
-                Username = _newUsername,
-                Name = _newName,
-                Password = _newPassword,
-                Role = _newRole
-            });
-
-            _newUsername = string.Empty;
-            _newName = string.Empty;
-            _newPassword = string.Empty;
-            _newRole = Role.User;
-            _successMessage = "เพิ่มผู้ใช้สำเร็จ";
-            await LoadUsersAsync();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
+        _editingId = null;
+        _formUsername = string.Empty;
+        _formName = string.Empty;
+        _formPassword = string.Empty;
+        _formRole = Role.User;
+        _showModal = true;
     }
 
-    private void StartEdit(User user)
+    private void OpenEditModal(User user)
     {
         ClearMessages();
-        _editingUserId = user.Id;
-        _editUsername = user.Username;
-        _editName = user.Name;
-        _editRole = user.Role;
-        _editPassword = string.Empty;
+        _editingId = user.Id;
+        _formUsername = user.Username;
+        _formName = user.Name;
+        _formPassword = string.Empty;
+        _formRole = user.Role;
+        _showModal = true;
     }
 
-    private void CancelEdit()
-    {
-        _editingUserId = null;
-        _editUsername = string.Empty;
-        _editName = string.Empty;
-        _editPassword = string.Empty;
-        _editRole = Role.User;
-    }
+    private void CloseModal() => _showModal = false;
 
-    private async Task SaveEditAsync()
+    private async Task SaveModalAsync()
     {
         ClearMessages();
-
-        if (!_editingUserId.HasValue)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_editUsername) || string.IsNullOrWhiteSpace(_editName))
+        if (string.IsNullOrWhiteSpace(_formUsername) || string.IsNullOrWhiteSpace(_formName))
         {
             _errorMessage = "กรุณากรอกชื่อผู้ใช้และชื่อ-นามสกุล";
             return;
         }
-
+        if (!_editingId.HasValue && string.IsNullOrWhiteSpace(_formPassword))
+        {
+            _errorMessage = "กรุณากรอกรหัสผ่าน";
+            return;
+        }
         try
         {
-            await UserService.UpdateAsync(
-                new User
+            if (_editingId.HasValue)
+            {
+                await UserService.UpdateAsync(new User
                 {
-                    Id = _editingUserId.Value,
-                    Username = _editUsername,
-                    Name = _editName,
-                    Role = _editRole
-                },
-                _editPassword);
-
-            _successMessage = "แก้ไขผู้ใช้สำเร็จ";
-            CancelEdit();
+                    Id = _editingId.Value,
+                    Username = _formUsername.Trim(),
+                    Name = _formName.Trim(),
+                    Role = _formRole
+                }, _formPassword);
+                _successMessage = "แก้ไขผู้ใช้สำเร็จ";
+            }
+            else
+            {
+                await UserService.CreateAsync(new User
+                {
+                    Username = _formUsername.Trim(),
+                    Name = _formName.Trim(),
+                    Password = _formPassword,
+                    Role = _formRole
+                });
+                _successMessage = "เพิ่มผู้ใช้สำเร็จ";
+            }
+            CloseModal();
             await LoadUsersAsync();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
     }
 
-    private async Task DeleteUserAsync(Guid userId)
+    private async Task DeleteUserAsync(Guid id)
     {
         ClearMessages();
-
         try
         {
-            await UserService.DeleteAsync(userId);
+            await UserService.DeleteAsync(id);
             _successMessage = "ลบผู้ใช้สำเร็จ";
             await LoadUsersAsync();
         }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
+        catch (Exception ex) { _errorMessage = ex.Message; }
     }
 
-    private void ClearMessages()
-    {
-        _errorMessage = string.Empty;
-        _successMessage = string.Empty;
-    }
+    private void ClearMessages() { _errorMessage = string.Empty; _successMessage = string.Empty; }
 }
