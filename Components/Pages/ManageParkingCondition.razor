@@ -1,0 +1,325 @@
+@page "/manage/parking-condition"
+@inject CurrentUserContext CurrentUserContext
+@inject ParkingConditionService ParkingConditionService
+@inject ParkingLotService ParkingLotService
+@using CarPark.Models
+@using CarPark.Shared.Enums
+
+<PageTitle>จัดการเงื่อนไขจอดรถ</PageTitle>
+
+<div class="view-head">
+    <h1>จัดการเงื่อนไขจอดรถ</h1>
+    <p class="view-subtitle">กำหนดประเภทสิทธิ์จอดฟรี เช่น รถเจ้าของร้าน พนักงาน รถส่งของ ฯลฯ</p>
+</div>
+
+@if (!CurrentUserContext.IsAdmin)
+{
+    <div class="alert alert-danger">เฉพาะผู้ดูแลระบบเท่านั้น</div>
+    return;
+}
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger">@_errorMessage</div>
+}
+@if (!string.IsNullOrEmpty(_successMessage))
+{
+    <div class="alert alert-success">@_successMessage</div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">เพิ่มเงื่อนไขใหม่</h5>
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label">ชื่อ</label>
+                <input class="form-control" @bind="_newName" placeholder="รถเจ้าของร้านค้า" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">ประเภท</label>
+                <select class="form-select" @bind="_newType">
+                    <option value="@ParkingConditionType.FullyFree">ฟรีทั้งหมด</option>
+                    <option value="@ParkingConditionType.FreeFirstMinutes">ฟรี N นาทีแรก</option>
+                    <option value="@ParkingConditionType.QuotaFree">ฟรีตามโควต้า (คัน/วัน)</option>
+                </select>
+            </div>
+            @if (_newType == ParkingConditionType.FreeFirstMinutes)
+            {
+                <div class="col-md-2">
+                    <label class="form-label">นาทีที่ฟรี</label>
+                    <input class="form-control" type="number" min="1" @bind="_newFreeMinutes" placeholder="60" />
+                </div>
+            }
+            @if (_newType == ParkingConditionType.QuotaFree)
+            {
+                <div class="col-md-2">
+                    <label class="form-label">โควต้า (คัน/วัน)</label>
+                    <input class="form-control" type="number" min="1" @bind="_newQuotaPerDay" placeholder="10" />
+                </div>
+            }
+        </div>
+        <div class="row g-2 mt-1">
+            <div class="col-md-auto d-flex align-items-end gap-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="newWaive" @bind="_newWaiveOvernight" />
+                    <label class="form-check-label" for="newWaive">ยกเว้นค่าปรับค้างคืน</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="newActive" @bind="_newIsActive" />
+                    <label class="form-check-label" for="newActive">เปิดใช้</label>
+                </div>
+            </div>
+        </div>
+        <div class="row g-2 mt-1">
+            <div class="col-md-5">
+                <label class="form-label">หมายเหตุ</label>
+                <input class="form-control" @bind="_newNotes" placeholder="(ไม่บังคับ)" />
+            </div>
+        </div>
+        <button class="btn btn-primary mt-3" @onclick="CreateAsync">เพิ่มเงื่อนไข</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">เงื่อนไขทั้งหมด</h5>
+        @if (_isLoading)
+        {
+            <p>กำลังโหลด...</p>
+        }
+        else if (_conditions.Count == 0)
+        {
+            <p class="text-muted">ยังไม่มีเงื่อนไข</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>ชื่อ</th>
+                            <th>ประเภท</th>
+                            <th>รายละเอียด</th>
+                            <th>ยกเว้นค้างคืน</th>
+                            <th>สถานะ</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cond in _conditions)
+                        {
+                            @if (_editingId == cond.Id)
+                            {
+                                <tr class="table-warning">
+                                    <td><input class="form-control form-control-sm" @bind="_editName" /></td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="_editType">
+                                            <option value="@ParkingConditionType.FullyFree">ฟรีทั้งหมด</option>
+                                            <option value="@ParkingConditionType.FreeFirstMinutes">ฟรี N นาทีแรก</option>
+                                            <option value="@ParkingConditionType.QuotaFree">โควต้า</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        @if (_editType == ParkingConditionType.FreeFirstMinutes)
+                                        {
+                                            <input class="form-control form-control-sm" type="number" min="1" @bind="_editFreeMinutes" style="width:80px" />
+                                            <small class="text-muted">นาที</small>
+                                        }
+                                        else if (_editType == ParkingConditionType.QuotaFree)
+                                        {
+                                            <input class="form-control form-control-sm" type="number" min="1" @bind="_editQuotaPerDay" style="width:80px" />
+                                            <small class="text-muted">คัน/วัน</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <input class="form-check-input" type="checkbox" @bind="_editWaiveOvernight" />
+                                    </td>
+                                    <td>
+                                        <input class="form-check-input" type="checkbox" @bind="_editIsActive" />
+                                    </td>
+                                    <td class="text-end" style="white-space:nowrap">
+                                        <button class="btn btn-sm btn-success me-1" @onclick="SaveEditAsync">บันทึก</button>
+                                        <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">ยกเลิก</button>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td>@cond.ConditionName</td>
+                                    <td>@GetTypeName(cond.ConditionType)</td>
+                                    <td>@GetDetail(cond)</td>
+                                    <td>@(cond.WaiveOvernightPenalty ? "ใช่" : "-")</td>
+                                    <td>
+                                        <span class="badge @(cond.IsActive ? "bg-success" : "bg-secondary")">
+                                            @(cond.IsActive ? "เปิด" : "ปิด")
+                                        </span>
+                                    </td>
+                                    <td class="text-end" style="white-space:nowrap">
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => StartEdit(cond)">แก้ไข</button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(cond.Id)">ลบ</button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<ParkingCondition> _conditions = [];
+    private bool _isLoading = true;
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
+
+    // New form
+    private string _newName = string.Empty;
+    private ParkingConditionType _newType = ParkingConditionType.FullyFree;
+    private int? _newFreeMinutes;
+    private int? _newQuotaPerDay;
+    private bool _newWaiveOvernight = false;
+    private bool _newIsActive = true;
+    private string _newNotes = string.Empty;
+
+    // Edit form
+    private Guid? _editingId;
+    private string _editName = string.Empty;
+    private ParkingConditionType _editType;
+    private int? _editFreeMinutes;
+    private int? _editQuotaPerDay;
+    private bool _editWaiveOvernight;
+    private bool _editIsActive;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _conditions = await ParkingConditionService.GetAllAsync();
+        _isLoading = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        ClearMessages();
+        try
+        {
+            var entity = new ParkingCondition
+            {
+                ConditionName = _newName,
+                ConditionType = _newType,
+                FreeMinutes = _newType == ParkingConditionType.FreeFirstMinutes ? _newFreeMinutes : null,
+                QuotaPerDay = _newType == ParkingConditionType.QuotaFree ? _newQuotaPerDay : null,
+                WaiveOvernightPenalty = _newWaiveOvernight,
+                Notes = _newNotes,
+                IsActive = _newIsActive
+            };
+            await ParkingConditionService.CreateAsync(entity);
+            _successMessage = "เพิ่มเงื่อนไขสำเร็จ";
+            ResetNewForm();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void StartEdit(ParkingCondition cond)
+    {
+        _editingId = cond.Id;
+        _editName = cond.ConditionName;
+        _editType = cond.ConditionType;
+        _editFreeMinutes = cond.FreeMinutes;
+        _editQuotaPerDay = cond.QuotaPerDay;
+        _editWaiveOvernight = cond.WaiveOvernightPenalty;
+        _editIsActive = cond.IsActive;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingId is null) return;
+        ClearMessages();
+        try
+        {
+            var entity = new ParkingCondition
+            {
+                Id = _editingId.Value,
+                ConditionName = _editName,
+                ConditionType = _editType,
+                FreeMinutes = _editType == ParkingConditionType.FreeFirstMinutes ? _editFreeMinutes : null,
+                QuotaPerDay = _editType == ParkingConditionType.QuotaFree ? _editQuotaPerDay : null,
+                WaiveOvernightPenalty = _editWaiveOvernight,
+                IsActive = _editIsActive
+            };
+            await ParkingConditionService.UpdateAsync(entity);
+            _successMessage = "แก้ไขสำเร็จ";
+            _editingId = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void CancelEdit() => _editingId = null;
+
+    private async Task DeleteAsync(Guid id)
+    {
+        ClearMessages();
+        try
+        {
+            await ParkingConditionService.DeleteAsync(id);
+            _successMessage = "ลบสำเร็จ";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void ResetNewForm()
+    {
+        _newName = string.Empty;
+        _newType = ParkingConditionType.FullyFree;
+        _newFreeMinutes = null;
+        _newQuotaPerDay = null;
+        _newWaiveOvernight = false;
+        _newIsActive = true;
+        _newNotes = string.Empty;
+    }
+
+    private void ClearMessages()
+    {
+        _errorMessage = string.Empty;
+        _successMessage = string.Empty;
+    }
+
+    private static string GetTypeName(ParkingConditionType type) => type switch
+    {
+        ParkingConditionType.FullyFree => "ฟรีทั้งหมด",
+        ParkingConditionType.FreeFirstMinutes => "ฟรี N นาทีแรก",
+        ParkingConditionType.QuotaFree => "ฟรีตามโควต้า",
+        _ => "-"
+    };
+
+    private static string GetDetail(ParkingCondition cond) => cond.ConditionType switch
+    {
+        ParkingConditionType.FreeFirstMinutes => cond.FreeMinutes.HasValue ? $"{cond.FreeMinutes} นาที" : "-",
+        ParkingConditionType.QuotaFree => cond.QuotaPerDay.HasValue ? $"{cond.QuotaPerDay} คัน/วัน" : "-",
+        _ => "-"
+    };
+
+}

@@ -1,5 +1,6 @@
 using CarPark.Data;
 using CarPark.Models;
+using CarPark.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace CarPark.Services
@@ -33,26 +34,20 @@ namespace CarPark.Services
         public async Task<ParkingGate> CreateAsync(ParkingGate gate, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(gate.GateName))
-            {
                 throw new InvalidOperationException("กรุณากรอกชื่อประตู");
-            }
 
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
-            var lotExists = await db.ParkingLots.AnyAsync(x => x.Id == gate.ParkingLotId, cancellationToken);
-            if (!lotExists)
-            {
+            if (!await db.ParkingLots.AnyAsync(x => x.Id == gate.ParkingLotId, cancellationToken))
                 throw new InvalidOperationException("ไม่พบลานจอดรถ");
-            }
 
             var entity = new ParkingGate
             {
                 ParkingLotId = gate.ParkingLotId,
                 GateName = gate.GateName.Trim(),
                 IsActive = gate.IsActive,
-                CreateBy = currentUserContext.CurrentUserId,
-                CreateAt = DateTime.UtcNow
             };
+            entity.SetCreated(currentUserContext.CurrentUserId);
 
             db.ParkingGates.Add(entity);
             await db.SaveChangesAsync(cancellationToken);
@@ -62,9 +57,7 @@ namespace CarPark.Services
         public async Task UpdateAsync(ParkingGate gate, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(gate.GateName))
-            {
                 throw new InvalidOperationException("กรุณากรอกชื่อประตู");
-            }
 
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
@@ -73,8 +66,7 @@ namespace CarPark.Services
 
             existing.GateName = gate.GateName.Trim();
             existing.IsActive = gate.IsActive;
-            existing.UpdateBy = currentUserContext.CurrentUserId;
-            existing.UpdateAt = DateTime.UtcNow;
+            existing.SetUpdated(currentUserContext.CurrentUserId);
 
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -86,13 +78,7 @@ namespace CarPark.Services
             var existing = await db.ParkingGates.FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
                 ?? throw new InvalidOperationException("ไม่พบข้อมูลประตู");
 
-            existing.IsDeleted = true;
-            existing.IsActive = false;
-            existing.DeletedBy = currentUserContext.CurrentUserId;
-            existing.DeleteAt = DateTime.UtcNow;
-            existing.UpdateBy = currentUserContext.CurrentUserId;
-            existing.UpdateAt = DateTime.UtcNow;
-
+            existing.SetDeleted(currentUserContext.CurrentUserId);
             await db.SaveChangesAsync(cancellationToken);
         }
     }

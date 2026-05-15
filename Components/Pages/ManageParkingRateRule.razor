@@ -162,7 +162,6 @@ else
                                 <th>ประเภท</th>
                                 <th>จำนวนเงิน</th>
                                 <th>ขั้น</th>
-                                <th>เงื่อนไข</th>
                                 <th>ใช้งาน</th>
                                 <th class="text-end">จัดการ</th>
                             </tr>
@@ -188,7 +187,7 @@ else
                                         <td><input class="form-control" type="number" min="0" step="0.01" @bind="_editAmount" /></td>
                                         <td><input class="form-control" type="number" min="1" @bind="_editBillingStepMinutesText" /></td>
                                         <td><input class="form-check-input" type="checkbox" @bind="_editIsActive" /></td>
-                                        <td class="text-end">
+                                        <td class="text-end" colspan="2">
                                             <button class="btn btn-sm btn-success me-2" @onclick="SaveEditAsync">บันทึก</button>
                                             <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">ยกเลิก</button>
                                         </td>
@@ -202,18 +201,6 @@ else
                                         <td>@GetCalculationTypeLabel(rule.CalculationType)</td>
                                         <td>@rule.Amount</td>
                                         <td>@(rule.BillingStepMinutes?.ToString() ?? "-")</td>
-                                        <td>
-                                            @if (rule.CalculationType == ParkingRateCalculationType.ConditionalFree)
-                                            {
-                                                <button class="btn btn-sm btn-outline-info" @onclick="@(() => OpenConditionsModal(rule))">
-                                                    @(rule.Conditions.Count > 0 ? $"{rule.Conditions.Count} เงื่อนไข" : "+ เพิ่ม")
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">-</span>
-                                            }
-                                        </td>
                                         <td>@(rule.IsActive ? "ใช่" : "ไม่")</td>
                                         <td class="text-end">
                                             <button class="btn btn-sm btn-outline-primary me-2" @onclick="@(() => StartEdit(rule))">แก้ไข</button>
@@ -239,85 +226,6 @@ else
         <div class="alert alert-success mt-3" role="alert">@_successMessage</div>
     }
 
-    @if (_showConditionsModal && _conditionsRule is not null)
-    {
-        <div class="modal-backdrop fade show"></div>
-        <div class="modal fade show d-block" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header bg-info text-white">
-                        <h5 class="modal-title">เงื่อนไขจอดฟรี — @_conditionsRule.RuleName</h5>
-                        <button type="button" class="btn-close btn-close-white" @onclick="CloseConditionsModal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p class="text-muted small mb-3">
-                            ลูกค้าที่ผ่านเงื่อนไขใดเงื่อนไขหนึ่งด้านล่างจะได้รับสิทธิ์จอดฟรีตามกฎนี้
-                            (ต้องนำใบเสร็จมาแสดงที่ทางออก)
-                        </p>
-
-                        @if (_conditionsRule.Conditions.Count == 0)
-                        {
-                            <p class="text-muted">ยังไม่มีเงื่อนไข</p>
-                        }
-                        else
-                        {
-                            <table class="table table-sm align-middle mb-3">
-                                <thead>
-                                    <tr>
-                                        <th>ชื่อเงื่อนไข</th>
-                                        <th class="text-end"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var cond in _conditionsRule.Conditions)
-                                    {
-                                        <tr>
-                                            @if (_editingConditionId == cond.Id)
-                                            {
-                                                <td><input class="form-control form-control-sm" @bind="_editConditionName" /></td>
-                                                <td class="text-end">
-                                                    <button class="btn btn-sm btn-success me-1" @onclick="SaveConditionEditAsync">บันทึก</button>
-                                                    <button class="btn btn-sm btn-secondary" @onclick="CancelConditionEdit">ยกเลิก</button>
-                                                </td>
-                                            }
-                                            else
-                                            {
-                                                <td>@cond.ConditionName</td>
-                                                <td class="text-end">
-                                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="@(() => StartConditionEdit(cond))">แก้ไข</button>
-                                                    <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteConditionAsync(cond.Id))">ลบ</button>
-                                                </td>
-                                            }
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        }
-
-                        <hr />
-                        <h6>เพิ่มเงื่อนไขใหม่</h6>
-                        <div class="row g-2 align-items-end">
-                            <div class="col-md-9">
-                                <label class="form-label">ชื่อเงื่อนไข</label>
-                                <input class="form-control" @bind="_newConditionName" placeholder="เช่น ซื้อสินค้า Makro" />
-                            </div>
-                            <div class="col-md-3 d-flex align-items-end">
-                                <button class="btn btn-primary w-100" @onclick="AddConditionAsync">เพิ่มเงื่อนไข</button>
-                            </div>
-                        </div>
-
-                        @if (!string.IsNullOrWhiteSpace(_conditionErrorMessage))
-                        {
-                            <div class="alert alert-danger mt-2 mb-0" role="alert">@_conditionErrorMessage</div>
-                        }
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" @onclick="CloseConditionsModal">ปิด</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    }
 }
 
 @code {
@@ -676,118 +584,8 @@ else
         ParkingRateCalculationType.Free => "ฟรี",
         ParkingRateCalculationType.PerHour => "รายชั่วโมง",
         ParkingRateCalculationType.FlatAmount => "อัตราคงที่",
-        ParkingRateCalculationType.ConditionalFree => "ฟรีตามเงื่อนไข",
         _ => type.ToString()
     };
-
-    // ─── Conditions Modal ────────────────────────────────────────────
-
-    private bool _showConditionsModal;
-    private ParkingRateRule? _conditionsRule;
-    private string _conditionErrorMessage = string.Empty;
-
-    private string _newConditionName = string.Empty;
-
-    private Guid? _editingConditionId;
-    private string _editConditionName = string.Empty;
-
-    private void OpenConditionsModal(ParkingRateRule rule)
-    {
-        _conditionsRule = rule;
-        _showConditionsModal = true;
-        _conditionErrorMessage = string.Empty;
-        _newConditionName = string.Empty;
-        _editingConditionId = null;
-    }
-
-    private void CloseConditionsModal()
-    {
-        _showConditionsModal = false;
-        _conditionsRule = null;
-        _editingConditionId = null;
-        _conditionErrorMessage = string.Empty;
-    }
-
-    private async Task AddConditionAsync()
-    {
-        _conditionErrorMessage = string.Empty;
-        if (_conditionsRule is null) return;
-
-        try
-        {
-            var added = await ParkingRateRuleService.AddConditionAsync(
-                _conditionsRule.Id, _newConditionName);
-
-            _conditionsRule.Conditions.Add(added);
-            _newConditionName = string.Empty;
-        }
-        catch (Exception ex)
-        {
-            _conditionErrorMessage = ex.Message;
-        }
-    }
-
-    private void StartConditionEdit(ParkingRateCondition cond)
-    {
-        _editingConditionId = cond.Id;
-        _editConditionName = cond.ConditionName;
-        _conditionErrorMessage = string.Empty;
-    }
-
-    private void CancelConditionEdit()
-    {
-        _editingConditionId = null;
-        _conditionErrorMessage = string.Empty;
-    }
-
-    private async Task SaveConditionEditAsync()
-    {
-        _conditionErrorMessage = string.Empty;
-        if (!_editingConditionId.HasValue || _conditionsRule is null) return;
-
-        try
-        {
-            await ParkingRateRuleService.UpdateConditionAsync(
-                _editingConditionId.Value, _editConditionName);
-
-            var cond = _conditionsRule.Conditions.FirstOrDefault(c => c.Id == _editingConditionId.Value);
-            if (cond is not null)
-                cond.ConditionName = _editConditionName;
-
-            _editingConditionId = null;
-        }
-        catch (Exception ex)
-        {
-            _conditionErrorMessage = ex.Message;
-        }
-    }
-
-    private async Task DeleteConditionAsync(Guid conditionId)
-    {
-        _conditionErrorMessage = string.Empty;
-        if (_conditionsRule is null) return;
-
-        try
-        {
-            await ParkingRateRuleService.DeleteConditionAsync(conditionId);
-
-            var cond = _conditionsRule.Conditions.FirstOrDefault(c => c.Id == conditionId);
-            if (cond is not null)
-                _conditionsRule.Conditions.Remove(cond);
-
-            var ruleInList = _rules.FirstOrDefault(r => r.Id == _conditionsRule.Id);
-            if (ruleInList is not null)
-            {
-                var condInList = ruleInList.Conditions.FirstOrDefault(c => c.Id == conditionId);
-                if (condInList is not null)
-                    ruleInList.Conditions.Remove(condInList);
-            }
-        }
-        catch (Exception ex)
-        {
-            _conditionErrorMessage = ex.Message;
-        }
-    }
 
     private void ClearMessages()
     {

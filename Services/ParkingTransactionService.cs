@@ -214,8 +214,6 @@ namespace CarPark.Services
                 ?? throw new InvalidOperationException("ไม่พบบัตรที่เปิดอยู่สำหรับลานจอดรถนี้");
 
             var now = DateTime.UtcNow;
-            var totalMinutes = (int)Math.Ceiling((now - existing.InAt).TotalMinutes);
-            if (totalMinutes < 0) totalMinutes = 0;
 
             var lot = await db.ParkingLots
                 .AsNoTracking()
@@ -227,60 +225,78 @@ namespace CarPark.Services
                 .ToListAsync(cancellationToken);
 
             var inAtLocal = existing.InAt.ToLocalTime();
+            var nowLocal = now.ToLocalTime();
             var inDayBit = ParkingLotScheduleService.DayOfWeekToBit(inAtLocal.DayOfWeek);
             var matchedSchedule = schedules.FirstOrDefault(s => (s.DaysOfWeek & inDayBit) != 0);
 
+            // คำนวณนาทีที่เรียกเก็บได้สำหรับ matching conditions
+            bool previewIsAllDay = matchedSchedule?.IsAllDay ?? lot?.IsAllDay ?? true;
+            int totalMinutes;
+            if (previewIsAllDay)
+            {
+                totalMinutes = (int)Math.Ceiling((now - existing.InAt).TotalMinutes);
+                if (totalMinutes < 0) totalMinutes = 0;
+            }
+            else
+            {
+                TimeSpan billingStart, billingEnd;
+                if (matchedSchedule is not null)
+                {
+                    billingStart = matchedSchedule.BillingStartTime ?? matchedSchedule.OpenTime;
+                    billingEnd = matchedSchedule.BillingEndTime ?? matchedSchedule.CloseTime;
+                }
+                else
+                {
+                    billingStart = lot?.BillingStartTime ?? lot?.OpenTime ?? default;
+                    billingEnd = lot?.BillingEndTime ?? lot?.CloseTime ?? default;
+                }
+                totalMinutes = CalculateBillableMinutes(inAtLocal, nowLocal, billingStart, billingEnd);
+            }
+
             var activeRules = await db.ParkingRateRules
                 .AsNoTracking()
-                .Include(x => x.Conditions)
                 .Where(x => x.ParkingLotId == existing.ParkingLotId && x.IsActive)
                 .OrderBy(x => x.Sequence)
                 .ToListAsync(cancellationToken);
 
-            var scopedRules = matchedSchedule is not null
-                ? activeRules.Where(r => r.ParkingScheduleId == matchedSchedule.Id).ToList()
-                : activeRules.Where(r => r.ParkingScheduleId == null).ToList();
+            var applicableConditions = await db.ParkingConditions
+                .AsNoTracking()
+                .AsSplitQuery()
+                .Include(x => x.ConditionLots)
+                .Where(x => x.IsActive && x.ConditionLots.Any(cl => cl.ParkingLotId == existing.ParkingLotId))
+                .OrderBy(x => x.ConditionName)
+                .ToListAsync(cancellationToken);
 
-            var applicableConditions = scopedRules
-                .Where(r => r.CalculationType == ParkingRateCalculationType.ConditionalFree
-                         && totalMinutes >= r.StartMinute
-                         && (!r.EndMinute.HasValue || totalMinutes <= r.EndMinute.Value))
-                .SelectMany(r => r.Conditions)
-                .ToList();
-
-            var chargeResult = CalculateCharge(activeRules, existing.InAt, now, conditionMet: false, lot, matchedSchedule);
+            var chargeResult = CalculateCharge(activeRules, existing.InAt, now, condition: null, lot, matchedSchedule);
 
             return new CheckOutPreview(existing, applicableConditions, chargeResult.TotalAmount);
         }
 
-        public async Task<ParkingTransaction> CheckOutAsync(
+        public async Task<CheckOutResult> CheckOutAsync(
             string ticketNo,
             string plateNo,
             Guid? parkingLotId = null,
-            bool conditionMet = false,
-            string? conditionName = null,
+            Guid? parkingConditionId = null,
             CancellationToken cancellationToken = default)
         {
             var normalizedPlateNo = NormalizeRequired(plateNo, "Plate number is required.");
-            return await CheckOutCoreAsync(ticketNo, normalizedPlateNo, parkingLotId, conditionMet, conditionName, cancellationToken);
+            return await CheckOutCoreAsync(ticketNo, normalizedPlateNo, parkingLotId, parkingConditionId, cancellationToken);
         }
 
-        public async Task<ParkingTransaction> CheckOutByTicketAsync(
+        public async Task<CheckOutResult> CheckOutByTicketAsync(
             string ticketNo,
             Guid? parkingLotId = null,
-            bool conditionMet = false,
-            string? conditionName = null,
+            Guid? parkingConditionId = null,
             CancellationToken cancellationToken = default)
         {
-            return await CheckOutCoreAsync(ticketNo, null, parkingLotId, conditionMet, conditionName, cancellationToken);
+            return await CheckOutCoreAsync(ticketNo, null, parkingLotId, parkingConditionId, cancellationToken);
         }
 
-        private async Task<ParkingTransaction> CheckOutCoreAsync(
+        private async Task<CheckOutResult> CheckOutCoreAsync(
             string ticketNo,
             string? expectedPlateNo,
             Guid? parkingLotId = null,
-            bool conditionMet = false,
-            string? conditionName = null,
+            Guid? parkingConditionId = null,
             CancellationToken cancellationToken = default)
         {
             var normalizedTicketNo = NormalizeRequired(ticketNo, "Ticket number is required.");
@@ -327,28 +343,67 @@ namespace CarPark.Services
                     .OrderBy(x => x.Sequence)
                     .ToListAsync(cancellationToken);
 
-            var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt, conditionMet, lot, matchedSchedule);
+            // โหลดและตรวจสอบเงื่อนไข
+            ParkingCondition? condition = null;
+            bool quotaExceeded = false;
+            string? quotaMessage = null;
+
+            if (parkingConditionId.HasValue)
+            {
+                condition = await db.ParkingConditions
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == parkingConditionId.Value, cancellationToken);
+
+                if (condition is not null && condition.ConditionType == Shared.Enums.ParkingConditionType.QuotaFree
+                    && condition.QuotaPerDay.HasValue)
+                {
+                    var lotOpenTime = matchedSchedule?.OpenTime ?? lot?.OpenTime ?? default;
+                    var nowLocal = DateTime.Now;
+                    var todayOpen = nowLocal.Date + lotOpenTime;
+                    var operatingDayStart = todayOpen > nowLocal ? todayOpen.AddDays(-1) : todayOpen;
+                    var operatingDayStartUtc = operatingDayStart.ToUniversalTime();
+
+                    var usedToday = await db.ParkingTransactions
+                        .AsNoTracking()
+                        .CountAsync(x =>
+                            x.ParkingConditionId == condition.Id
+                            && x.ParkingLotId == existing.ParkingLotId
+                            && x.OutAt.HasValue
+                            && x.OutAt >= operatingDayStartUtc,
+                            cancellationToken);
+
+                    if (usedToday >= condition.QuotaPerDay.Value)
+                    {
+                        quotaExceeded = true;
+                        quotaMessage = $"โควต้าเต็ม: {condition.ConditionName} ({condition.QuotaPerDay} คัน/วัน) — คิดราคาปกติ";
+                        condition = null;
+                    }
+                }
+            }
+
+            var chargeResult = CalculateCharge(activeRules, existing.InAt, outAt, condition, lot, matchedSchedule);
 
             existing.OutAt = outAt;
             existing.OutGateId = currentUserContext.CurrentGate?.Id;
             existing.TotalMinutes = chargeResult.TotalMinutes;
             existing.TotalAmount = chargeResult.TotalAmount;
             existing.IsOvernight = chargeResult.IsOvernight;
-            existing.Remark = conditionMet && !string.IsNullOrWhiteSpace(conditionName)
-                ? conditionName.Trim()
-                : null;
+            existing.ParkingConditionId = condition?.Id;
+            existing.Remark = condition is not null ? condition.ConditionName : null;
             existing.Status = TransactionType.OUT;
             existing.UpdateBy = currentUserContext.CurrentUserId;
             existing.UpdateAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync(cancellationToken);
 
-            return await db.ParkingTransactions
+            var saved = await db.ParkingTransactions
                 .AsSplitQuery()
                 .Include(x => x.ParkingLot)
                 .Include(x => x.InGate)
                 .Include(x => x.OutGate)
                 .FirstAsync(x => x.Id == existing.Id, cancellationToken);
+
+            return new CheckOutResult(saved, quotaExceeded, quotaMessage);
         }
 
         private static string NormalizeRequired(string value, string message)
@@ -365,16 +420,16 @@ namespace CarPark.Services
             List<ParkingRateRule> allRules,
             DateTime inAtUtc,
             DateTime outAtUtc,
-            bool conditionMet = false,
+            ParkingCondition? condition = null,
             ParkingLot? lot = null,
             ParkingLotSchedule? matchedSchedule = null)
         {
-            var totalMinutes = (int)Math.Ceiling((outAtUtc - inAtUtc).TotalMinutes);
-            if (totalMinutes < 0) totalMinutes = 0;
+            var inAtLocal = inAtUtc.ToLocalTime();
+            var outAtLocal = outAtUtc.ToLocalTime();
 
-            // กำหนดเวลาทำการและกฎที่ใช้ตาม schedule (ถ้ามี) หรือ lot (fallback)
+            // กำหนดเวลาทำการ + ช่วงเวลาเก็บค่า จาก schedule (ถ้ามี) หรือ lot (fallback)
             bool isAllDay;
-            TimeSpan openTime, closeTime;
+            TimeSpan openTime, closeTime, billingStart, billingEnd;
             List<ParkingRateRule> rules;
 
             if (matchedSchedule is not null)
@@ -382,6 +437,8 @@ namespace CarPark.Services
                 isAllDay = matchedSchedule.IsAllDay;
                 openTime = matchedSchedule.OpenTime;
                 closeTime = matchedSchedule.CloseTime;
+                billingStart = matchedSchedule.BillingStartTime ?? matchedSchedule.OpenTime;
+                billingEnd = matchedSchedule.BillingEndTime ?? matchedSchedule.CloseTime;
                 rules = allRules.Where(r => r.ParkingScheduleId == matchedSchedule.Id).ToList();
             }
             else
@@ -389,13 +446,14 @@ namespace CarPark.Services
                 isAllDay = lot?.IsAllDay ?? true;
                 openTime = lot?.OpenTime ?? default;
                 closeTime = lot?.CloseTime ?? default;
+                billingStart = lot?.BillingStartTime ?? openTime;
+                billingEnd = lot?.BillingEndTime ?? closeTime;
                 rules = allRules.Where(r => r.ParkingScheduleId == null).ToList();
             }
 
-            // ถ้าเวลาเข้าอยู่นอกเวลาทำการ → จอดฟรี
+            // ถ้าเวลาเข้าอยู่นอกเวลาทำการ → จอดฟรี ไม่ถือว่าค้างคืน
             if (!isAllDay)
             {
-                var inAtLocal = inAtUtc.ToLocalTime();
                 var inTime = TimeOnly.FromTimeSpan(inAtLocal.TimeOfDay);
                 var open = TimeOnly.FromTimeSpan(openTime);
                 var close = TimeOnly.FromTimeSpan(closeTime);
@@ -405,14 +463,64 @@ namespace CarPark.Services
                     : inTime < open && inTime >= close;
 
                 if (isOutside)
-                    return new ChargeResult(totalMinutes, 0m, inAtUtc.Date != outAtUtc.Date);
+                {
+                    var rawMinutes = (int)Math.Ceiling((outAtUtc - inAtUtc).TotalMinutes);
+                    return new ChargeResult(rawMinutes < 0 ? 0 : rawMinutes, 0m, false);
+                }
+            }
+
+            // ค้างคืนตรวจจากเวลาจริงที่รถอยู่ (ไม่หักเวลาฟรี)
+            int nightCount = isAllDay
+                ? (outAtLocal.Date - inAtLocal.Date).Days
+                : CalculateOvernightNights(inAtLocal, outAtLocal, closeTime);
+            var isOvernight = nightCount > 0;
+
+            // FullyFree / QuotaFree → ฟรี ±ค่าปรับค้างคืน
+            if (condition is not null
+                && (condition.ConditionType == Shared.Enums.ParkingConditionType.FullyFree
+                    || condition.ConditionType == Shared.Enums.ParkingConditionType.QuotaFree))
+            {
+                var rawMin = (int)Math.Ceiling((outAtUtc - inAtUtc).TotalMinutes);
+                if (rawMin < 0) rawMin = 0;
+                if (!isOvernight || condition.WaiveOvernightPenalty)
+                    return new ChargeResult(rawMin, 0m, isOvernight);
+                if (lot is not null && lot.HasOvernightPenalty && lot.OvernightPenaltyAmount > 0)
+                    return new ChargeResult(rawMin, lot.OvernightPenaltyAmount * nightCount, true);
+                return new ChargeResult(rawMin, 0m, true);
+            }
+
+            // FreeFirstMinutes → เลื่อน inAt ไปข้างหน้าตามนาทีที่จอดฟรี แล้วค่อยคำนวณ billable
+            if (condition is not null && condition.ConditionType == Shared.Enums.ParkingConditionType.FreeFirstMinutes
+                && condition.FreeMinutes.HasValue)
+            {
+                var originalInAtUtc = inAtUtc;
+                inAtLocal = inAtLocal.AddMinutes(condition.FreeMinutes.Value);
+                inAtUtc = inAtUtc.AddMinutes(condition.FreeMinutes.Value);
+                if (inAtLocal >= outAtLocal)
+                {
+                    // ออกภายในช่วงเวลาฟรี → ไม่คิดเงิน
+                    var rawMin = (int)Math.Ceiling((outAtUtc - originalInAtUtc).TotalMinutes);
+                    return new ChargeResult(rawMin < 0 ? 0 : rawMin, 0m, isOvernight);
+                }
+            }
+
+            // คำนวณนาทีที่เรียกเก็บได้ นับจาก effective inAt (หลังหักเวลาฟรีแล้ว)
+            int totalMinutes;
+            if (isAllDay)
+            {
+                totalMinutes = (int)Math.Ceiling((outAtUtc - inAtUtc).TotalMinutes);
+                if (totalMinutes < 0) totalMinutes = 0;
+            }
+            else
+            {
+                totalMinutes = CalculateBillableMinutes(inAtLocal, outAtLocal, billingStart, billingEnd);
             }
 
             var regularRules = rules.OrderBy(x => x.Sequence).ToList();
             var matchedRule = regularRules.FirstOrDefault(
                 x => totalMinutes >= x.StartMinute
                      && (!x.EndMinute.HasValue || totalMinutes <= x.EndMinute.Value)
-                     && (x.CalculationType != ParkingRateCalculationType.ConditionalFree || conditionMet));
+                     );
 
             decimal baseAmount = 0m;
             if (matchedRule is not null)
@@ -420,29 +528,70 @@ namespace CarPark.Services
                 baseAmount = matchedRule.CalculationType switch
                 {
                     ParkingRateCalculationType.Free => 0m,
-                    ParkingRateCalculationType.ConditionalFree => 0m,
                     ParkingRateCalculationType.FlatAmount => matchedRule.Amount,
                     ParkingRateCalculationType.PerHour => CalculatePerStepAmount(totalMinutes, matchedRule),
                     _ => 0m
                 };
             }
 
-            var nightCount = (outAtUtc.Date - inAtUtc.Date).Days;
-            var isOvernight = nightCount > 0;
             if (!isOvernight)
-            {
                 return new ChargeResult(totalMinutes, baseAmount, false);
-            }
 
             // ค่าปรับข้ามคืนกำหนดที่ระดับ ParkingLot คูณตามจำนวนคืน
             if (lot is not null && lot.HasOvernightPenalty && lot.OvernightPenaltyAmount > 0)
             {
                 var totalPenalty = lot.OvernightPenaltyAmount * nightCount;
-                var totalAmount = Math.Max(baseAmount, totalPenalty);
-                return new ChargeResult(totalMinutes, totalAmount, true);
+                return new ChargeResult(totalMinutes, totalPenalty, true);
             }
 
             return new ChargeResult(totalMinutes, baseAmount, true);
+        }
+
+        // คำนวณนาทีที่เรียกเก็บได้ โดยนับเฉพาะเวลาในช่วงเก็บค่า (billingStart–billingEnd) ของแต่ละวัน
+        private static int CalculateBillableMinutes(DateTime inAtLocal, DateTime outAtLocal, TimeSpan openTime, TimeSpan closeTime)
+        {
+            int billable = 0;
+            var currentDate = inAtLocal.Date;
+
+            while (currentDate <= outAtLocal.Date)
+            {
+                var dayOpen = currentDate + openTime;
+                var dayClose = currentDate + closeTime;
+
+                var windowStart = currentDate == inAtLocal.Date
+                    ? (inAtLocal > dayOpen ? inAtLocal : dayOpen)
+                    : dayOpen;
+                var windowEnd = currentDate == outAtLocal.Date
+                    ? (outAtLocal < dayClose ? outAtLocal : dayClose)
+                    : dayClose;
+
+                if (windowEnd > windowStart)
+                    billable += (int)Math.Ceiling((windowEnd - windowStart).TotalMinutes);
+
+                currentDate = currentDate.AddDays(1);
+            }
+
+            return Math.Max(0, billable);
+        }
+
+        // นับจำนวนคืนที่ค้างคืน: นับทุกวันที่รถยังอยู่หลังเวลาปิด
+        private static int CalculateOvernightNights(DateTime inAtLocal, DateTime outAtLocal, TimeSpan closeTime)
+        {
+            int nights = 0;
+            var currentDate = inAtLocal.Date;
+
+            while (currentDate <= outAtLocal.Date)
+            {
+                var dayClose = currentDate + closeTime;
+
+                // ข้ามวัน หรือออกหลังเวลาปิดในวันนั้น → ค้างคืน
+                if (currentDate < outAtLocal.Date || outAtLocal > dayClose)
+                    nights++;
+
+                currentDate = currentDate.AddDays(1);
+            }
+
+            return nights;
         }
 
         private static decimal CalculatePerStepAmount(int totalMinutes, ParkingRateRule rule)

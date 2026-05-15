@@ -118,7 +118,7 @@ else
                         <table class="table table-borderless mb-0">
                             <tbody>
                                 <tr>
-                                    <td class="text-muted fw-semibold" style="width:40%">หมายเลขบัตร</td>
+                                    <td class="text-muted fw-semibold" style="width:40%">#</td>
                                     <td>@_modalTransaction.TicketNo</td>
                                 </tr>
                                 <tr>
@@ -191,24 +191,33 @@ else
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header bg-warning">
-                        <h5 class="modal-title">ตรวจสอบเงื่อนไขจอดฟรี</h5>
+                        <h5 class="modal-title">เลือกเงื่อนไขจอดรถ</h5>
                     </div>
                     <div class="modal-body">
-                        <p class="mb-1">บัตร <strong>@_pendingCheckOut.Transaction.TicketNo</strong>
-                            — กรุณาตรวจสอบใบเสร็จแล้วเลือกเงื่อนไขที่ผ่าน</p>
-                        <p class="text-muted small mb-3">(ต้องมีตราประทับจากร้านค้า)</p>
+                        <p class="mb-3">บัตร <strong>@_pendingCheckOut.Transaction.TicketNo</strong>
+                            · @_pendingCheckOut.Transaction.PlateNo
+                            — เลือกเงื่อนไขที่ใช้</p>
                         <div class="d-grid gap-2">
                             @foreach (var cond in _pendingCheckOut.ApplicableConditions)
                             {
+                                var c = cond;
                                 <button class="btn btn-success btn-lg"
-                                        @onclick="@(() => ConfirmValidationAsync(true, cond.ConditionName))">
-                                    ✓ @cond.ConditionName
+                                        @onclick="@(() => ConfirmConditionAsync(c.Id))">
+                                    ✓ @c.ConditionName
+                                    @if (c.ConditionType == CarPark.Shared.Enums.ParkingConditionType.FreeFirstMinutes && c.FreeMinutes.HasValue)
+                                    {
+                                        <small class="ms-2 opacity-75">(ฟรี @c.FreeMinutes นาทีแรก)</small>
+                                    }
+                                    else if (c.ConditionType == CarPark.Shared.Enums.ParkingConditionType.QuotaFree && c.QuotaPerDay.HasValue)
+                                    {
+                                        <small class="ms-2 opacity-75">(โควต้า @c.QuotaPerDay คัน/วัน)</small>
+                                    }
                                 </button>
                             }
                             <hr class="my-1" />
                             <button class="btn btn-outline-secondary"
-                                    @onclick="@(() => ConfirmValidationAsync(false, null))">
-                                ไม่ผ่านเงื่อนไข — คิดราคาปกติ (@_pendingCheckOut.NormalCharge.ToString("0.00") บาท)
+                                    @onclick="@(() => ConfirmConditionAsync(null))">
+                                ไม่มีเงื่อนไข — คิดราคาปกติ (@_pendingCheckOut.NormalCharge.ToString("0.00") บาท)
                             </button>
                         </div>
                     </div>
@@ -497,8 +506,8 @@ else
                     return;
                 }
 
-                var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo, currentLotId, conditionMet: false);
-                ShowCheckOutModal(result);
+                var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo, currentLotId);
+                ShowCheckOutModal(result.Transaction);
             }
             else
             {
@@ -673,7 +682,7 @@ else
         _pendingFocusCloseBtn = true;
     }
 
-    private async Task ConfirmValidationAsync(bool conditionMet, string? conditionName)
+    private async Task ConfirmConditionAsync(Guid? conditionId)
     {
         if (_pendingCheckOut is null) return;
 
@@ -686,8 +695,12 @@ else
 
         try
         {
-            var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo, lotId, conditionMet: conditionMet, conditionName: conditionName);
-            ShowCheckOutModal(result);
+            var result = await ParkingTransactionService.CheckOutByTicketAsync(ticketNo, lotId, parkingConditionId: conditionId);
+
+            if (result.QuotaExceeded && !string.IsNullOrEmpty(result.QuotaMessage))
+                _errorMessage = result.QuotaMessage;
+
+            ShowCheckOutModal(result.Transaction);
 
             _ticketNoInput = string.Empty;
             _plateNoInput = string.Empty;

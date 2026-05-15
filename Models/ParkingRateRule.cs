@@ -1,10 +1,12 @@
 using CarPark.Shared;
 using CarPark.Shared.Enums;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CarPark.Models
 {
     public class ParkingRateRule : BaseEntity
     {
+        [ForeignKey(nameof(ParkingLot))]
         public Guid ParkingLotId { get; set; }
 
         public string RuleName { get; set; } = string.Empty;
@@ -21,15 +23,12 @@ namespace CarPark.Models
 
         public int? BillingStepMinutes { get; set; }
 
-        public bool IsActive { get; set; } = true;
-
         /// <summary>null = กฎทั่วไปของลาน, มีค่า = กฎเฉพาะ schedule นั้น</summary>
+        [ForeignKey(nameof(ParkingSchedule))]
         public Guid? ParkingScheduleId { get; set; }
 
         public ParkingLot? ParkingLot { get; set; }
 
         public ParkingLotSchedule? ParkingSchedule { get; set; }
-
-        public ICollection<ParkingRateCondition> Conditions { get; set; } = [];
     }
 }

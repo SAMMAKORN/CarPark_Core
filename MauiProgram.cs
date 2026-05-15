@@ -46,6 +46,7 @@ namespace CarPark
             builder.Services.AddScoped<ParkingGateService>();
             builder.Services.AddScoped<ParkingLotScheduleService>();
             builder.Services.AddScoped<ParkingTransactionService>();
+            builder.Services.AddScoped<ParkingConditionService>();
 
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();

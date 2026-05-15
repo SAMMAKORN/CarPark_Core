@@ -1,5 +1,6 @@
 using CarPark.Data;
 using CarPark.Models;
+using CarPark.Shared;
 using CarPark.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,6 +27,7 @@ namespace CarPark.Services
 
             return await db.ParkingLotSchedules
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(x => x.ParkingLot)
                 .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         }
@@ -46,10 +48,11 @@ namespace CarPark.Services
                 IsAllDay = schedule.IsAllDay,
                 OpenTime = schedule.OpenTime,
                 CloseTime = schedule.CloseTime,
+                BillingStartTime = schedule.BillingStartTime,
+                BillingEndTime = schedule.BillingEndTime,
                 IsActive = schedule.IsActive,
-                CreateBy = currentUserContext.CurrentUserId,
-                CreateAt = DateTime.UtcNow
             };
+            entity.SetCreated(currentUserContext.CurrentUserId);
 
             db.ParkingLotSchedules.Add(entity);
             await db.SaveChangesAsync(cancellationToken);
@@ -72,9 +75,10 @@ namespace CarPark.Services
             existing.IsAllDay = schedule.IsAllDay;
             existing.OpenTime = schedule.OpenTime;
             existing.CloseTime = schedule.CloseTime;
+            existing.BillingStartTime = schedule.BillingStartTime;
+            existing.BillingEndTime = schedule.BillingEndTime;
             existing.IsActive = schedule.IsActive;
-            existing.UpdateBy = currentUserContext.CurrentUserId;
-            existing.UpdateAt = DateTime.UtcNow;
+            existing.SetUpdated(currentUserContext.CurrentUserId);
 
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -86,13 +90,7 @@ namespace CarPark.Services
             var existing = await db.ParkingLotSchedules.FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
                 ?? throw new InvalidOperationException("ไม่พบตารางเวลา");
 
-            existing.IsDeleted = true;
-            existing.IsActive = false;
-            existing.DeletedBy = currentUserContext.CurrentUserId;
-            existing.DeleteAt = DateTime.UtcNow;
-            existing.UpdateBy = currentUserContext.CurrentUserId;
-            existing.UpdateAt = DateTime.UtcNow;
-
+            existing.SetDeleted(currentUserContext.CurrentUserId);
             await db.SaveChangesAsync(cancellationToken);
         }
 
@@ -108,6 +106,10 @@ namespace CarPark.Services
 
             if (!schedule.IsAllDay && schedule.OpenTime >= schedule.CloseTime)
                 throw new InvalidOperationException("เวลาเปิดต้องน้อยกว่าเวลาปิด");
+
+            if (!schedule.IsAllDay && schedule.BillingStartTime.HasValue && schedule.BillingEndTime.HasValue
+                && schedule.BillingStartTime.Value >= schedule.BillingEndTime.Value)
+                throw new InvalidOperationException("เวลาเริ่มเก็บค่าต้องน้อยกว่าเวลาสิ้นสุดเก็บค่า");
         }
 
         private static async Task CheckDayOverlapAsync(

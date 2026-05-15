@@ -10,70 +10,42 @@ namespace CarPark.Data
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // OnDelete behaviors — annotation ทำแทนไม่ได้
+            modelBuilder.Entity<ParkingLotSchedule>()
+                .HasOne(x => x.ParkingLot).WithMany(x => x.Schedules)
+                .HasForeignKey(x => x.ParkingLotId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<ParkingRateRule>()
+                .HasOne(x => x.ParkingSchedule).WithMany(x => x.RateRules)
+                .HasForeignKey(x => x.ParkingScheduleId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // Composite PK — annotation ทำแทนไม่ได้
+            modelBuilder.Entity<ParkingConditionLot>()
+                .HasKey(x => new { x.ParkingConditionId, x.ParkingLotId });
+            modelBuilder.Entity<ParkingConditionLot>()
+                .HasOne(x => x.Condition).WithMany(x => x.ConditionLots)
+                .HasForeignKey(x => x.ParkingConditionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ParkingConditionLot>()
+                .HasOne(x => x.ParkingLot).WithMany()
+                .HasForeignKey(x => x.ParkingLotId).OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ParkingGate>()
+                .HasOne(x => x.ParkingLot).WithMany(x => x.Gates)
+                .HasForeignKey(x => x.ParkingLotId).OnDelete(DeleteBehavior.NoAction);
+
+            // ParkingTransaction มี InGate/OutGate สองตัวชี้ไป ParkingGate — ต้องระบุชัดเจน
+            modelBuilder.Entity<ParkingTransaction>()
+                .HasOne(x => x.InGate).WithMany()
+                .HasForeignKey(x => x.InGateId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ParkingTransaction>()
+                .HasOne(x => x.OutGate).WithMany()
+                .HasForeignKey(x => x.OutGateId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<ParkingTransaction>()
+                .HasOne(x => x.ParkingCondition).WithMany()
+                .HasForeignKey(x => x.ParkingConditionId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
             var adminUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
             var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-            modelBuilder.Entity<ParkingLot>(entity =>
-            {
-                entity.Property(x => x.OpenTime).HasColumnType("time");
-                entity.Property(x => x.CloseTime).HasColumnType("time");
-            });
-
-            modelBuilder.Entity<ParkingLotSchedule>(entity =>
-            {
-                entity.ToTable("ParkingLotSchedules");
-                entity.Property(x => x.ScheduleName).HasMaxLength(100).IsRequired();
-                entity.Property(x => x.OpenTime).HasColumnType("time");
-                entity.Property(x => x.CloseTime).HasColumnType("time");
-                entity.HasOne(x => x.ParkingLot)
-                    .WithMany(x => x.Schedules)
-                    .HasForeignKey(x => x.ParkingLotId)
-                    .OnDelete(DeleteBehavior.NoAction);
-            });
-
-            modelBuilder.Entity<ParkingRateRule>(entity =>
-            {
-                entity.HasOne(x => x.ParkingSchedule)
-                    .WithMany(x => x.RateRules)
-                    .HasForeignKey(x => x.ParkingScheduleId)
-                    .IsRequired(false)
-                    .OnDelete(DeleteBehavior.NoAction);
-            });
-
-            modelBuilder.Entity<ParkingRateCondition>(entity =>
-            {
-                entity.ToTable("ParkingRateConditions");
-                entity.Property(x => x.ConditionName).HasMaxLength(200).IsRequired();
-                entity.HasOne(x => x.Rule)
-                    .WithMany(x => x.Conditions)
-                    .HasForeignKey(x => x.ParkingRateRuleId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            modelBuilder.Entity<ParkingGate>(entity =>
-            {
-                entity.ToTable("ParkingGates");
-                entity.Property(x => x.GateName).HasMaxLength(100).IsRequired();
-                entity.HasOne(x => x.ParkingLot)
-                    .WithMany(x => x.Gates)
-                    .HasForeignKey(x => x.ParkingLotId)
-                    .OnDelete(DeleteBehavior.NoAction);
-            });
-
-            modelBuilder.Entity<ParkingTransaction>(entity =>
-            {
-                entity.HasOne(x => x.InGate)
-                    .WithMany()
-                    .HasForeignKey(x => x.InGateId)
-                    .IsRequired(false)
-                    .OnDelete(DeleteBehavior.NoAction);
-
-                entity.HasOne(x => x.OutGate)
-                    .WithMany()
-                    .HasForeignKey(x => x.OutGateId)
-                    .IsRequired(false)
-                    .OnDelete(DeleteBehavior.NoAction);
-            });
 
             modelBuilder.Entity<User>(entity =>
             {
@@ -87,7 +59,7 @@ namespace CarPark.Data
                         Password = "PBKDF2$SHA256$100000$CNMtqGjCwsaY4gv7R9CXhw==$lGxIuuvrpQU4rT2dzxg8Y7sbv2kmTK8mG2kMgrOUMc4=",
                         Name = "System Admin",
                         Role = Role.Admin,
-                        MustChangePassword = true,
+                        MustChangePassword = false,
                         CreateAt = seedCreatedAt,
                         IsDeleted = false
                     });
@@ -125,7 +97,8 @@ namespace CarPark.Data
         public DbSet<ParkingGate> ParkingGates { get; set; }
         public DbSet<ParkingLotSchedule> ParkingLotSchedules { get; set; }
         public DbSet<ParkingRateRule> ParkingRateRules { get; set; }
-        public DbSet<ParkingRateCondition> ParkingRateConditions { get; set; }
+        public DbSet<ParkingCondition> ParkingConditions { get; set; }
+        public DbSet<ParkingConditionLot> ParkingConditionLots { get; set; }
         public DbSet<User> Users { get; set; }
     }
 }

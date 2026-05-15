@@ -2,7 +2,7 @@ namespace CarPark.Models
 {
     public record CheckOutPreview(
         ParkingTransaction Transaction,
-        List<ParkingRateCondition> ApplicableConditions,
+        List<ParkingCondition> ApplicableConditions,
         decimal NormalCharge
     );
 }

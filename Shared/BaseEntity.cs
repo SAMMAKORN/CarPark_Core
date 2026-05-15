@@ -20,6 +20,8 @@ namespace CarPark.Shared
 
         public User? UpdateByUser { get; set; }
         public DateTime? UpdateAt { get; set; }
+        public bool IsActive { get; set; } = true;
+
         public bool IsDeleted { get; set; } = false;
 
         [ForeignKey(nameof(DeletedByUser))]

@@ -75,12 +75,22 @@ else
             {
                 <div class="row g-2 mt-1">
                     <div class="col-md-2">
-                        <label class="form-label">เวลาเปิด</label>
+                        <label class="form-label">เวลาเปิด (ทำการ)</label>
                         <input class="form-control" type="time" @bind="_newOpenTime" />
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">เวลาปิด</label>
+                        <label class="form-label">เวลาปิด (ทำการ)</label>
                         <input class="form-control" type="time" @bind="_newCloseTime" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">เริ่มเก็บค่า <small class="text-muted">(ไม่บังคับ)</small></label>
+                        <input class="form-control" type="time" value="@_newBillingStart?.ToString("HH:mm")"
+                               @onchange="e => _newBillingStart = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">สิ้นสุดเก็บค่า</label>
+                        <input class="form-control" type="time" value="@_newBillingEnd?.ToString("HH:mm")"
+                               @onchange="e => _newBillingEnd = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
                     </div>
                 </div>
             }
@@ -148,9 +158,24 @@ else
                                                 </div>
                                                 @if (!_editIsAllDay)
                                                 {
-                                                    <input class="form-control form-control-sm" type="time" style="width:110px" @bind="_editOpenTime" />
-                                                    <span>-</span>
-                                                    <input class="form-control form-control-sm" type="time" style="width:110px" @bind="_editCloseTime" />
+                                                    <div class="d-flex flex-column gap-1">
+                                                        <div class="d-flex align-items-center gap-1">
+                                                            <small class="text-muted" style="width:50px">ทำการ</small>
+                                                            <input class="form-control form-control-sm" type="time" style="width:100px" @bind="_editOpenTime" />
+                                                            <span>-</span>
+                                                            <input class="form-control form-control-sm" type="time" style="width:100px" @bind="_editCloseTime" />
+                                                        </div>
+                                                        <div class="d-flex align-items-center gap-1">
+                                                            <small class="text-muted" style="width:50px">เก็บค่า</small>
+                                                            <input class="form-control form-control-sm" type="time" style="width:100px"
+                                                                   value="@_editBillingStart?.ToString("HH:mm")"
+                                                                   @onchange="e => _editBillingStart = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
+                                                            <span>-</span>
+                                                            <input class="form-control form-control-sm" type="time" style="width:100px"
+                                                                   value="@_editBillingEnd?.ToString("HH:mm")"
+                                                                   @onchange="e => _editBillingEnd = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
+                                                        </div>
+                                                    </div>
                                                 }
                                             </div>
                                         </td>
@@ -175,7 +200,13 @@ else
                                             }
                                             else
                                             {
-                                                <span>@s.OpenTime.ToString(@"hh\:mm") - @s.CloseTime.ToString(@"hh\:mm")</span>
+                                                <div>
+                                                    <div><small class="text-muted">ทำการ</small> @s.OpenTime.ToString(@"hh\:mm") - @s.CloseTime.ToString(@"hh\:mm")</div>
+                                                    @if (s.BillingStartTime.HasValue && s.BillingEndTime.HasValue)
+                                                    {
+                                                        <div><small class="text-muted">เก็บค่า</small> @s.BillingStartTime.Value.ToString(@"hh\:mm") - @s.BillingEndTime.Value.ToString(@"hh\:mm")</div>
+                                                    }
+                                                </div>
                                             }
                                         </td>
                                         <td>@(s.IsActive ? "ใช้งาน" : "ปิด")</td>
@@ -223,20 +254,24 @@ else
     ];
 
     // New form
-    private string  _newName    = string.Empty;
-    private int     _newDays;
-    private bool    _newIsAllDay = false;
-    private TimeOnly _newOpenTime  = new(6, 0);
-    private TimeOnly _newCloseTime = new(22, 0);
+    private string    _newName        = string.Empty;
+    private int       _newDays;
+    private bool      _newIsAllDay    = false;
+    private TimeOnly  _newOpenTime    = new(6, 0);
+    private TimeOnly  _newCloseTime   = new(22, 0);
+    private TimeOnly? _newBillingStart;
+    private TimeOnly? _newBillingEnd;
 
     // Edit form
-    private Guid?   _editingId;
-    private string  _editName    = string.Empty;
-    private int     _editDays;
-    private bool    _editIsAllDay;
-    private TimeOnly _editOpenTime  = new(6, 0);
-    private TimeOnly _editCloseTime = new(22, 0);
-    private bool    _editIsActive = true;
+    private Guid?     _editingId;
+    private string    _editName        = string.Empty;
+    private int       _editDays;
+    private bool      _editIsAllDay;
+    private TimeOnly  _editOpenTime    = new(6, 0);
+    private TimeOnly  _editCloseTime   = new(22, 0);
+    private TimeOnly? _editBillingStart;
+    private TimeOnly? _editBillingEnd;
+    private bool      _editIsActive    = true;
 
     private string _errorMessage   = string.Empty;
     private string _successMessage = string.Empty;
@@ -287,17 +322,20 @@ else
         {
             await ScheduleService.CreateAsync(new ParkingLotSchedule
             {
-                ParkingLotId = ParkingLotId,
-                ScheduleName = _newName,
-                DaysOfWeek   = _newDays,
-                IsAllDay     = _newIsAllDay,
-                OpenTime     = _newOpenTime.ToTimeSpan(),
-                CloseTime    = _newCloseTime.ToTimeSpan(),
-                IsActive     = true
+                ParkingLotId    = ParkingLotId,
+                ScheduleName    = _newName,
+                DaysOfWeek      = _newDays,
+                IsAllDay        = _newIsAllDay,
+                OpenTime         = _newOpenTime.ToTimeSpan(),
+                CloseTime        = _newCloseTime.ToTimeSpan(),
+                BillingStartTime = _newBillingStart?.ToTimeSpan(),
+                BillingEndTime   = _newBillingEnd?.ToTimeSpan(),
+                IsActive        = true
             });
             _newName = string.Empty; _newDays = 0;
             _newIsAllDay = false;
             _newOpenTime = new(6, 0); _newCloseTime = new(22, 0);
+            _newBillingStart = null; _newBillingEnd = null;
             _successMessage = "เพิ่มตารางเวลาสำเร็จ";
             await LoadSchedulesAsync();
         }
@@ -307,13 +345,15 @@ else
     private void StartEdit(ParkingLotSchedule s)
     {
         ClearMessages();
-        _editingId    = s.Id;
-        _editName     = s.ScheduleName;
-        _editDays     = s.DaysOfWeek;
-        _editIsAllDay = s.IsAllDay;
-        _editOpenTime  = TimeOnly.FromTimeSpan(s.OpenTime);
-        _editCloseTime = TimeOnly.FromTimeSpan(s.CloseTime);
-        _editIsActive = s.IsActive;
+        _editingId       = s.Id;
+        _editName        = s.ScheduleName;
+        _editDays        = s.DaysOfWeek;
+        _editIsAllDay    = s.IsAllDay;
+        _editOpenTime    = TimeOnly.FromTimeSpan(s.OpenTime);
+        _editCloseTime   = TimeOnly.FromTimeSpan(s.CloseTime);
+        _editBillingStart = s.BillingStartTime.HasValue ? TimeOnly.FromTimeSpan(s.BillingStartTime.Value) : null;
+        _editBillingEnd   = s.BillingEndTime.HasValue   ? TimeOnly.FromTimeSpan(s.BillingEndTime.Value)   : null;
+        _editIsActive    = s.IsActive;
     }
 
     private void CancelEdit() => _editingId = null;
@@ -326,14 +366,16 @@ else
         {
             await ScheduleService.UpdateAsync(new ParkingLotSchedule
             {
-                Id           = _editingId.Value,
-                ParkingLotId = ParkingLotId,
-                ScheduleName = _editName,
-                DaysOfWeek   = _editDays,
-                IsAllDay     = _editIsAllDay,
-                OpenTime     = _editOpenTime.ToTimeSpan(),
-                CloseTime    = _editCloseTime.ToTimeSpan(),
-                IsActive     = _editIsActive
+                Id               = _editingId.Value,
+                ParkingLotId     = ParkingLotId,
+                ScheduleName     = _editName,
+                DaysOfWeek       = _editDays,
+                IsAllDay         = _editIsAllDay,
+                OpenTime         = _editOpenTime.ToTimeSpan(),
+                CloseTime        = _editCloseTime.ToTimeSpan(),
+                BillingStartTime = _editBillingStart?.ToTimeSpan(),
+                BillingEndTime   = _editBillingEnd?.ToTimeSpan(),
+                IsActive         = _editIsActive
             });
             _successMessage = "แก้ไขตารางเวลาสำเร็จ";
             CancelEdit();

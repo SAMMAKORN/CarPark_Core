@@ -1,6 +1,9 @@
 @page "/manage/parking-lot"
 @inject CurrentUserContext CurrentUserContext
 @inject ParkingLotService ParkingLotService
+@inject ParkingConditionService ParkingConditionService
+@using CarPark.Models
+@using CarPark.Shared.Enums
 
 <PageTitle>จัดการลานจอดรถ</PageTitle>
 
@@ -45,6 +48,16 @@ else
                     <div class="col-md-1">
                         <label class="form-label">ปิด</label>
                         <input class="form-control" type="time" @bind="_newLotCloseTime" />
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label">เก็บค่าเริ่ม <small class="text-muted">(ไม่บังคับ)</small></label>
+                        <input class="form-control" type="time" value="@_newLotBillingStart?.ToString("HH:mm")"
+                               @onchange="e => _newLotBillingStart = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label">เก็บค่าสิ้นสุด</label>
+                        <input class="form-control" type="time" value="@_newLotBillingEnd?.ToString("HH:mm")"
+                               @onchange="e => _newLotBillingEnd = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
                     </div>
                 }
                 <div class="col-md-2">
@@ -151,9 +164,24 @@ else
                                                 </div>
                                                 @if (!_editLotIsAllDay)
                                                 {
-                                                    <input class="form-control form-control-sm" type="time" style="width:110px" @bind="_editLotOpenTime" />
-                                                    <span>-</span>
-                                                    <input class="form-control form-control-sm" type="time" style="width:110px" @bind="_editLotCloseTime" />
+                                                    <div class="d-flex flex-column gap-1">
+                                                        <div class="d-flex align-items-center gap-1">
+                                                            <small class="text-muted" style="width:58px">ทำการ</small>
+                                                            <input class="form-control form-control-sm" type="time" style="width:100px" @bind="_editLotOpenTime" />
+                                                            <span>-</span>
+                                                            <input class="form-control form-control-sm" type="time" style="width:100px" @bind="_editLotCloseTime" />
+                                                        </div>
+                                                        <div class="d-flex align-items-center gap-1">
+                                                            <small class="text-muted" style="width:58px">เก็บค่า</small>
+                                                            <input class="form-control form-control-sm" type="time" style="width:100px"
+                                                                   value="@_editLotBillingStart?.ToString("HH:mm")"
+                                                                   @onchange="e => _editLotBillingStart = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
+                                                            <span>-</span>
+                                                            <input class="form-control form-control-sm" type="time" style="width:100px"
+                                                                   value="@_editLotBillingEnd?.ToString("HH:mm")"
+                                                                   @onchange="e => _editLotBillingEnd = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value!.ToString()!)" />
+                                                        </div>
+                                                    </div>
                                                 }
                                             </div>
                                         </td>
@@ -188,7 +216,13 @@ else
                                             }
                                             else
                                             {
-                                                <span>@lot.OpenTime.ToString(@"hh\:mm") - @lot.CloseTime.ToString(@"hh\:mm")</span>
+                                                <div>
+                                                    <div><small class="text-muted">ทำการ</small> @lot.OpenTime.ToString(@"hh\:mm") - @lot.CloseTime.ToString(@"hh\:mm")</div>
+                                                    @if (lot.BillingStartTime.HasValue && lot.BillingEndTime.HasValue)
+                                                    {
+                                                        <div><small class="text-muted">เก็บค่า</small> @lot.BillingStartTime.Value.ToString(@"hh\:mm") - @lot.BillingEndTime.Value.ToString(@"hh\:mm")</div>
+                                                    }
+                                                </div>
                                             }
                                         </td>
                                         <td>
@@ -206,6 +240,7 @@ else
                                             <a class="btn btn-sm btn-outline-secondary me-2" href="@($"/manage/parking-lot/{lot.Id}/gates")">ประตู</a>
                                             <a class="btn btn-sm btn-outline-info me-2" href="@($"/manage/parking-lot/{lot.Id}/schedules")">ตารางเวลา</a>
                                             <a class="btn btn-sm btn-outline-dark me-2" href="@($"/manage/parking-lot/{lot.Id}/rate-rules")">อัตราค่าบริการ</a>
+                                            <button class="btn btn-sm btn-outline-success me-2" @onclick="@(() => OpenConditionModalAsync(lot))">เงื่อนไข</button>
                                             <button class="btn btn-sm btn-outline-primary me-2" @onclick="@(() => StartEdit(lot))">แก้ไข</button>
                                             <button class="btn btn-sm btn-outline-danger" @onclick="@(() => DeleteLotAsync(lot.Id))">ลบ</button>
                                         </td>
@@ -234,6 +269,47 @@ else
     }
 }
 
+@if (_conditionModalLotId.HasValue)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">ผูกเงื่อนไขจอดรถ — @_conditionModalLotName</h5>
+                    <button type="button" class="btn-close" @onclick="CloseConditionModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_conditionModalConditions.Count == 0)
+                    {
+                        <p class="text-muted">ไม่มีเงื่อนไขที่ต้องผูกกับลาน (ทุกเงื่อนไขใช้ได้ทุกลานอยู่แล้ว)</p>
+                    }
+                    else
+                    {
+                        <p class="text-muted small mb-2">เลือกเงื่อนไขที่ใช้ได้กับลานนี้ (เฉพาะที่ตั้งค่า "ไม่ใช้ได้ทุกลาน")</p>
+                        @foreach (var cond in _conditionModalConditions)
+                        {
+                            var condId = cond.Id;
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="cond_@condId"
+                                       checked="@_conditionSelectedIds.Contains(condId)"
+                                       @onchange="e => ToggleCondition(condId, (bool)(e.Value ?? false))" />
+                                <label class="form-check-label" for="cond_@condId">
+                                    @cond.ConditionName
+                                    <span class="text-muted small ms-1">(@GetTypeName(cond.ConditionType))</span>
+                                </label>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseConditionModal">ยกเลิก</button>
+                    <button class="btn btn-primary" @onclick="SaveLotConditionsAsync">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private readonly List<ParkingLot> _lots = [];
     private bool _isLoading = true;
@@ -243,6 +319,8 @@ else
     private bool _newLotIsAllDay = true;
     private TimeOnly _newLotOpenTime = new(6, 0);
     private TimeOnly _newLotCloseTime = new(22, 0);
+    private TimeOnly? _newLotBillingStart;
+    private TimeOnly? _newLotBillingEnd;
     private bool _newLotHasOvernightPenalty;
     private decimal _newLotOvernightPenaltyAmount;
     private bool _newLotIsActive = true;
@@ -253,12 +331,19 @@ else
     private bool _editLotIsAllDay = true;
     private TimeOnly _editLotOpenTime = new(6, 0);
     private TimeOnly _editLotCloseTime = new(22, 0);
+    private TimeOnly? _editLotBillingStart;
+    private TimeOnly? _editLotBillingEnd;
     private bool _editLotHasOvernightPenalty;
     private decimal _editLotOvernightPenaltyAmount;
     private bool _editLotIsActive;
 
     private string _copySourceLotId = string.Empty;
     private string _copyTargetLotId = string.Empty;
+
+    private Guid? _conditionModalLotId;
+    private string _conditionModalLotName = string.Empty;
+    private List<ParkingCondition> _conditionModalConditions = [];
+    private HashSet<Guid> _conditionSelectedIds = [];
 
     private string _errorMessage = string.Empty;
     private string _successMessage = string.Empty;
@@ -313,6 +398,8 @@ else
                 IsAllDay = _newLotIsAllDay,
                 OpenTime = _newLotOpenTime.ToTimeSpan(),
                 CloseTime = _newLotCloseTime.ToTimeSpan(),
+                BillingStartTime = _newLotBillingStart?.ToTimeSpan(),
+                BillingEndTime = _newLotBillingEnd?.ToTimeSpan(),
                 HasOvernightPenalty = _newLotHasOvernightPenalty,
                 OvernightPenaltyAmount = _newLotOvernightPenaltyAmount,
                 IsActive = _newLotIsActive
@@ -323,6 +410,8 @@ else
             _newLotIsAllDay = true;
             _newLotOpenTime = new(6, 0);
             _newLotCloseTime = new(22, 0);
+            _newLotBillingStart = null;
+            _newLotBillingEnd = null;
             _newLotHasOvernightPenalty = false;
             _newLotOvernightPenaltyAmount = 0;
             _newLotIsActive = true;
@@ -345,6 +434,8 @@ else
         _editLotIsAllDay = lot.IsAllDay;
         _editLotOpenTime = TimeOnly.FromTimeSpan(lot.OpenTime);
         _editLotCloseTime = TimeOnly.FromTimeSpan(lot.CloseTime);
+        _editLotBillingStart = lot.BillingStartTime.HasValue ? TimeOnly.FromTimeSpan(lot.BillingStartTime.Value) : null;
+        _editLotBillingEnd = lot.BillingEndTime.HasValue ? TimeOnly.FromTimeSpan(lot.BillingEndTime.Value) : null;
         _editLotHasOvernightPenalty = lot.HasOvernightPenalty;
         _editLotOvernightPenaltyAmount = lot.OvernightPenaltyAmount;
         _editLotIsActive = lot.IsActive;
@@ -358,6 +449,8 @@ else
         _editLotIsAllDay = true;
         _editLotOpenTime = new(6, 0);
         _editLotCloseTime = new(22, 0);
+        _editLotBillingStart = null;
+        _editLotBillingEnd = null;
         _editLotHasOvernightPenalty = false;
         _editLotOvernightPenaltyAmount = 0;
         _editLotIsActive = false;
@@ -387,6 +480,8 @@ else
                 IsAllDay = _editLotIsAllDay,
                 OpenTime = _editLotOpenTime.ToTimeSpan(),
                 CloseTime = _editLotCloseTime.ToTimeSpan(),
+                BillingStartTime = _editLotBillingStart?.ToTimeSpan(),
+                BillingEndTime = _editLotBillingEnd?.ToTimeSpan(),
                 HasOvernightPenalty = _editLotHasOvernightPenalty,
                 OvernightPenaltyAmount = _editLotOvernightPenaltyAmount,
                 IsActive = _editLotIsActive
@@ -464,6 +559,53 @@ else
 
         return true;
     }
+
+    private async Task OpenConditionModalAsync(ParkingLot lot)
+    {
+        ClearMessages();
+        _conditionModalLotId = lot.Id;
+        _conditionModalLotName = lot.LotCode;
+        var all = await ParkingConditionService.GetAllAsync();
+        _conditionModalConditions = all.Where(c => c.IsActive).ToList();
+        _conditionSelectedIds = await ParkingConditionService.GetLinkedConditionIdsAsync(lot.Id);
+    }
+
+    private void CloseConditionModal()
+    {
+        _conditionModalLotId = null;
+        _conditionModalConditions = [];
+        _conditionSelectedIds = [];
+    }
+
+    private void ToggleCondition(Guid condId, bool selected)
+    {
+        if (selected) _conditionSelectedIds.Add(condId);
+        else _conditionSelectedIds.Remove(condId);
+    }
+
+    private async Task SaveLotConditionsAsync()
+    {
+        if (!_conditionModalLotId.HasValue) return;
+        ClearMessages();
+        try
+        {
+            await ParkingConditionService.UpdateLotConditionsAsync(_conditionModalLotId.Value, _conditionSelectedIds);
+            _successMessage = "บันทึกเงื่อนไขสำเร็จ";
+            CloseConditionModal();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private static string GetTypeName(ParkingConditionType type) => type switch
+    {
+        ParkingConditionType.FullyFree => "ฟรีทั้งหมด",
+        ParkingConditionType.FreeFirstMinutes => "ฟรี N นาทีแรก",
+        ParkingConditionType.QuotaFree => "ฟรีตามโควต้า",
+        _ => "-"
+    };
 
     private void ClearMessages()
     {
