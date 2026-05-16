@@ -109,75 +109,112 @@ else
     {
         <div class="modal-backdrop fade show"></div>
         <div class="modal fade show d-block" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
                 <div class="modal-content">
-                    <div class="modal-header @(_isCheckIn ? "bg-success text-white" : "bg-primary text-white")">
-                        <h5 class="modal-title">@(_isCheckIn ? "บันทึกการเข้าสำเร็จ" : "คืนบัตรสำเร็จ")</h5>
+
+                    @* ── Header ── *@
+                    <div class="modal-header @(_isCheckIn ? "bg-success text-white" : "bg-primary text-white") py-3">
+                        <h4 class="modal-title fw-bold mb-0">@(_isCheckIn ? "บันทึกการเข้าสำเร็จ" : "คืนบัตรสำเร็จ")</h4>
                     </div>
-                    <div class="modal-body">
-                        <table class="table table-borderless mb-0">
-                            <tbody>
-                                <tr>
-                                    <td class="text-muted fw-semibold" style="width:40%">#</td>
-                                    <td>@_modalTransaction.TicketNo</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted fw-semibold">ทะเบียนรถ</td>
-                                    <td>@_modalTransaction.PlateNo</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted fw-semibold">ลานจอดรถ</td>
-                                    <td>@(_modalTransaction.ParkingLot?.LotName ?? _lots.FirstOrDefault(x => x.Id == _modalTransaction.ParkingLotId)?.LotName ?? "-")</td>
-                                </tr>
-                                @if (_modalTransaction.InGate is not null)
-                                {
-                                    <tr>
-                                        <td class="text-muted fw-semibold">ประตูเข้า</td>
-                                        <td>@_modalTransaction.InGate.GateName</td>
-                                    </tr>
-                                }
-                                @if (!_isCheckIn && _modalTransaction.OutGate is not null)
-                                {
-                                    <tr>
-                                        <td class="text-muted fw-semibold">ประตูออก</td>
-                                        <td>@_modalTransaction.OutGate.GateName</td>
-                                    </tr>
-                                }
-                                <tr>
-                                    <td class="text-muted fw-semibold">สถานะ</td>
-                                    <td>@(_isCheckIn ? "เข้า" : "ออก")</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted fw-semibold">เวลาเข้า</td>
-                                    <td>@ToLocalDateTimeText(_modalTransaction.InAt)</td>
-                                </tr>
-                                @if (!_isCheckIn)
-                                {
-                                    <tr>
-                                        <td class="text-muted fw-semibold">เวลาออก</td>
-                                        <td>@ToLocalDateTimeText(_modalTransaction.OutAt)</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted fw-semibold">ระยะเวลา</td>
-                                        <td>@(_modalTransaction.TotalMinutes ?? 0) นาที</td>
-                                    </tr>
-                                    <tr class="table-primary">
-                                        <td class="fw-bold fs-5">ยอดที่คำนวณได้</td>
-                                        <td class="fw-bold fs-2">@((_modalTransaction.TotalAmount ?? 0m).ToString("0.00")) บาท</td>
-                                    </tr>
-                                    @if (!string.IsNullOrWhiteSpace(_modalTransaction.Remark))
-                                    {
-                                        <tr class="table-success">
-                                            <td class="fw-semibold">หมายเหตุ</td>
-                                            <td>@_modalTransaction.Remark</td>
-                                        </tr>
-                                    }
-                                }
-                            </tbody>
-                        </table>
+
+                    <div class="modal-body p-4">
+
+                        @* ── Ticket + Plate (always big) ── *@
+                        <div class="d-flex gap-3 mb-3 flex-wrap">
+                            <div class="modal-info-chip">
+                                <div class="modal-info-label">หมายเลขบัตร</div>
+                                <div class="modal-info-value">@_modalTransaction.TicketNo</div>
+                            </div>
+                            <div class="modal-info-chip flex-grow-1">
+                                <div class="modal-info-label">ทะเบียนรถ</div>
+                                <div class="modal-info-value modal-plate">@_modalTransaction.PlateNo</div>
+                            </div>
+                        </div>
+
+                        @if (!_isCheckIn)
+                        {
+                            @* ── Condition badge (prominent, if any) ── *@
+                            @if (!string.IsNullOrWhiteSpace(_modalTransaction.Remark))
+                            {
+                                <div class="modal-condition-block mb-3">
+                                    <div class="modal-condition-label">เงื่อนไข</div>
+                                    <div class="modal-condition-name">@_modalTransaction.Remark</div>
+                                </div>
+                            }
+
+                            @* ── Duration / Overnight ── *@
+                            @{
+                                var mins = _modalTransaction.TotalMinutes ?? 0;
+                                var hours = (int)Math.Ceiling(mins / 60.0);
+                            }
+                            @if (_modalTransaction.IsOvernight)
+                            {
+                                <div class="modal-overnight-block mb-3">
+                                    <div class="modal-overnight-label">สถานะ</div>
+                                    <div class="modal-overnight-value">ค้างคืน</div>
+                                    <div class="modal-overnight-sub">
+                                        @if (mins < 60)
+                                        { <span>@mins นาที</span> }
+                                        else
+                                        { <span>@hours ชั่วโมง (@mins นาที)</span> }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="modal-info-chip mb-3">
+                                    <div class="modal-info-label">ระยะเวลาจอด</div>
+                                    <div class="modal-info-value">
+                                        @if (mins < 60)
+                                        {
+                                            <span>@mins <small class="fw-normal">นาที</small></span>
+                                        }
+                                        else
+                                        {
+                                            <span>@hours <small class="fw-normal">ชั่วโมง</small>
+                                                <span class="modal-duration-sub">(@mins นาที)</span>
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @* ── Amount (largest element) ── *@
+                            <div class="modal-amount-block mb-3">
+                                <div class="modal-amount-label">ยอดที่ต้องชำระ</div>
+                                <div class="modal-amount-value">
+                                    @((_modalTransaction.TotalAmount ?? 0m).ToString("N2"))
+                                    <span class="modal-amount-unit">บาท</span>
+                                </div>
+                            </div>
+                        }
+
+                        @* ── Secondary info ── *@
+                        <div class="modal-secondary-row">
+                            @{
+                                var lotName = _modalTransaction.ParkingLot?.LotName
+                                    ?? _lots.FirstOrDefault(x => x.Id == _modalTransaction.ParkingLotId)?.LotName
+                                    ?? "-";
+                            }
+                            <span><span class="modal-sec-label">ลาน</span> @lotName</span>
+                            @if (_modalTransaction.InGate is not null)
+                            {
+                                <span><span class="modal-sec-label">ประตูเข้า</span> @_modalTransaction.InGate.GateName</span>
+                            }
+                            @if (!_isCheckIn && _modalTransaction.OutGate is not null)
+                            {
+                                <span><span class="modal-sec-label">ประตูออก</span> @_modalTransaction.OutGate.GateName</span>
+                            }
+                            <span><span class="modal-sec-label">เข้า</span> @_modalTransaction.InAt.ToLocalTime().ToString("HH:mm")</span>
+                            @if (!_isCheckIn)
+                            {
+                                <span><span class="modal-sec-label">ออก</span> @(_modalTransaction.OutAt?.ToLocalTime().ToString("HH:mm") ?? "-")</span>
+                            }
+                        </div>
                     </div>
+
                     <div class="modal-footer">
-                        <button class="btn btn-danger" @ref="_closeModalBtnRef" @onclick="CloseModal">ปิด</button>
+                        <button class="btn btn-danger btn-lg w-100" @ref="_closeModalBtnRef" @onclick="CloseModal">ปิด</button>
                     </div>
                 </div>
             </div>
@@ -201,17 +238,31 @@ else
                             @foreach (var cond in _pendingCheckOut.ApplicableConditions)
                             {
                                 var c = cond;
-                                <button class="btn btn-success btn-lg"
+                                var isDisabled = _pendingCheckOut.DisabledReasons.TryGetValue(c.Id, out var disabledReason);
+                                <button class="btn @(isDisabled ? "btn-outline-secondary" : "btn-success") btn-lg text-start"
+                                        disabled="@isDisabled"
                                         @onclick="@(() => ConfirmConditionAsync(c.Id))">
-                                    ✓ @c.ConditionName
-                                    @if (c.ConditionType == CarPark.Shared.Enums.ParkingConditionType.FreeFirstMinutes && c.FreeMinutes.HasValue)
-                                    {
-                                        <small class="ms-2 opacity-75">(ฟรี @c.FreeMinutes นาทีแรก)</small>
-                                    }
-                                    else if (c.ConditionType == CarPark.Shared.Enums.ParkingConditionType.QuotaFree && c.QuotaPerDay.HasValue)
-                                    {
-                                        <small class="ms-2 opacity-75">(โควต้า @c.QuotaPerDay คัน/วัน)</small>
-                                    }
+                                    <div>
+                                        @(isDisabled ? "✗" : "✓") @c.ConditionName
+                                    </div>
+                                    <small class="opacity-75">
+                                        @if (isDisabled)
+                                        {
+                                            @disabledReason
+                                        }
+                                        else if (c.ConditionType == CarPark.Shared.Enums.ParkingConditionType.FreeFirstMinutes && c.FreeMinutes.HasValue)
+                                        {
+                                            <span>ฟรี @c.FreeMinutes นาทีแรก</span>
+                                        }
+                                        else if (c.ConditionType == CarPark.Shared.Enums.ParkingConditionType.QuotaFree && c.QuotaPerDay.HasValue)
+                                        {
+                                            <span>โควต้า @c.QuotaPerDay คัน/วัน</span>
+                                        }
+                                        else if (c.ConditionType == CarPark.Shared.Enums.ParkingConditionType.FullyFree)
+                                        {
+                                            <span>จอดฟรีทั้งหมด</span>
+                                        }
+                                    </small>
                                 </button>
                             }
                             <hr class="my-1" />

@@ -279,6 +279,146 @@ a:hover {
     }
 }
 
+/* ── Checkout result modal ── */
+.modal-info-chip {
+    background: rgba(19, 71, 78, 0.06);
+    border: 1px solid rgba(19, 71, 78, 0.12);
+    border-radius: 0.85rem;
+    padding: 0.6rem 1rem;
+    min-width: 120px;
+}
+
+.modal-info-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-500);
+    margin-bottom: 0.15rem;
+}
+
+.modal-info-value {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--ink-900);
+    line-height: 1.2;
+}
+
+.modal-plate {
+    font-size: 1.7rem;
+    letter-spacing: 0.06em;
+}
+
+.modal-duration-sub {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--ink-500);
+    margin-left: 0.4rem;
+}
+
+/* Condition block */
+.modal-condition-block {
+    border-radius: 0.9rem;
+    background: linear-gradient(120deg, #d1fae5, #a7f3d0);
+    border: 1.5px solid #6ee7b7;
+    padding: 0.75rem 1.1rem;
+}
+
+.modal-condition-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #065f46;
+    margin-bottom: 0.2rem;
+}
+
+.modal-condition-name {
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #064e3b;
+    line-height: 1.2;
+}
+
+/* Overnight block */
+.modal-overnight-block {
+    border-radius: 0.9rem;
+    background: linear-gradient(120deg, #fef3c7, #fde68a);
+    border: 1.5px solid #fbbf24;
+    padding: 0.75rem 1.1rem;
+}
+
+.modal-overnight-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #78350f;
+    margin-bottom: 0.2rem;
+}
+
+.modal-overnight-value {
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #92400e;
+    line-height: 1.2;
+}
+
+.modal-overnight-sub {
+    font-size: 0.82rem;
+    color: #b45309;
+    margin-top: 0.15rem;
+}
+
+/* Amount block */
+.modal-amount-block {
+    border-radius: 0.9rem;
+    background: linear-gradient(120deg, #dbeafe, #bfdbfe);
+    border: 1.5px solid #93c5fd;
+    padding: 0.85rem 1.1rem;
+    text-align: center;
+}
+
+.modal-amount-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #1e3a8a;
+    margin-bottom: 0.2rem;
+}
+
+.modal-amount-value {
+    font-size: 3.2rem;
+    font-weight: 900;
+    color: #1e3a8a;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+}
+
+.modal-amount-unit {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-left: 0.3rem;
+}
+
+/* Secondary info row */
+.modal-secondary-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.2rem;
+    font-size: 0.85rem;
+    color: var(--ink-500);
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--line-soft);
+}
+
+.modal-sec-label {
+    font-weight: 600;
+    color: var(--ink-700);
+    margin-right: 0.25rem;
+}
+
 /* ── Database offline banner ── */
 .db-offline-banner {
     position: fixed;

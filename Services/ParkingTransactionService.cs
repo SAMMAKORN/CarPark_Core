@@ -329,7 +329,40 @@ namespace CarPark.Services
 
             var chargeResult = CalculateCharge(activeRules, existing.InAt, now, condition: null, lot, matchedSchedule);
 
-            return new CheckOutPreview(existing, applicableConditions, chargeResult.TotalAmount);
+            // ── ตรวจสอบเงื่อนไขที่ใช้ไม่ได้ ──
+            var disabledReasons = new Dictionary<Guid, string>();
+
+            var lotOpenTime = matchedSchedule?.OpenTime ?? lot?.OpenTime ?? default;
+            var nowLocalForQuota = DateTime.Now;
+            var todayOpen = nowLocalForQuota.Date + lotOpenTime;
+            var operatingDayStartUtc = (todayOpen > nowLocalForQuota ? todayOpen.AddDays(-1) : todayOpen).ToUniversalTime();
+
+            foreach (var cond in applicableConditions)
+            {
+                if (cond.ConditionType == Shared.Enums.ParkingConditionType.FreeFirstMinutes
+                    && cond.FreeMinutes.HasValue
+                    && totalMinutes > cond.FreeMinutes.Value)
+                {
+                    disabledReasons[cond.Id] = $"จอดเกิน {cond.FreeMinutes} นาทีแรกแล้ว";
+                }
+                else if (cond.ConditionType == Shared.Enums.ParkingConditionType.QuotaFree
+                         && cond.QuotaPerDay.HasValue)
+                {
+                    var usedToday = await db.ParkingTransactions
+                        .AsNoTracking()
+                        .CountAsync(x =>
+                            x.ParkingConditionId == cond.Id
+                            && x.ParkingLotId == existing.ParkingLotId
+                            && x.OutAt.HasValue
+                            && x.OutAt >= operatingDayStartUtc,
+                            cancellationToken);
+
+                    if (usedToday >= cond.QuotaPerDay.Value)
+                        disabledReasons[cond.Id] = $"โควต้าเต็ม ({usedToday}/{cond.QuotaPerDay} คัน/วัน)";
+                }
+            }
+
+            return new CheckOutPreview(existing, applicableConditions, chargeResult.TotalAmount, disabledReasons);
         }
 
         public async Task<CheckOutResult> CheckOutAsync(
